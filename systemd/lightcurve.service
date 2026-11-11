@@ -1,0 +1,11 @@
+[Unit]
+Description=lightcurve hub
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/env python3 @APP@/bin/lightcurve serve --host @HOST@ --port @PORT@
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

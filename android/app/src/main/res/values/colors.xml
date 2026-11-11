@@ -1,0 +1,13 @@
+<resources>
+    <!-- plate: the photographic negative, for daylight -->
+    <color name="field">#E0E4DF</color>
+    <color name="well">#D3D8D3</color>
+    <color name="line">#A9B0AC</color>
+    <color name="ink">#16171C</color>
+    <color name="ink2">#4A4E57</color>
+    <color name="mark">#03528E</color>
+    <color name="warn">#A3341F</color>
+    <color name="icon_bg">#12173B</color>
+    <color name="icon_fg">#F1EDDD</color>
+    <bool name="light_bars">true</bool>
+</resources>

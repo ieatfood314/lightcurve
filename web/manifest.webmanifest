@@ -1,0 +1,10 @@
+{
+  "name": "lightcurve",
+  "short_name": "lightcurve",
+  "description": "When your screens were lit, on every device.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#12173b",
+  "theme_color": "#12173b",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

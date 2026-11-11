@@ -1,0 +1,11 @@
+<resources>
+    <!-- sky: the night itself -->
+    <color name="field">#12173B</color>
+    <color name="well">#0C1030</color>
+    <color name="line">#3A4172</color>
+    <color name="ink">#F1EDDD</color>
+    <color name="ink2">#B4B5C8</color>
+    <color name="mark">#6DB8FA</color>
+    <color name="warn">#FF8A70</color>
+    <bool name="light_bars">false</bool>
+</resources>

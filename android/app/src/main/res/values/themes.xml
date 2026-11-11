@@ -1,0 +1,13 @@
+<resources>
+    <style name="Theme.Lightcurve" parent="android:Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@color/field</item>
+        <item name="android:colorBackground">@color/field</item>
+        <item name="android:colorAccent">@color/mark</item>
+        <item name="android:statusBarColor">@color/field</item>
+        <item name="android:navigationBarColor">@color/field</item>
+        <item name="android:windowLightStatusBar">@bool/light_bars</item>
+        <item name="android:windowLightNavigationBar">@bool/light_bars</item>
+    </style>
+</resources>
