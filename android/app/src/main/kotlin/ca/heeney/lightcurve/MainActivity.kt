@@ -3,9 +3,7 @@ package ca.heeney.lightcurve
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -28,6 +26,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -302,7 +301,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24f), dp(28f), dp(24f), dp(48f))
         }
-        col.add(Mark(this), wrap = true)
+        col.add(mark(), wrap = true)
         col.section("Hub")
         hubField = field("http://hub:4625", uri = true)
         hubField.setOnEditorActionListener { _, action, _ -> if (action == EditorInfo.IME_ACTION_DONE) { connect(); true } else false }
@@ -387,21 +386,10 @@ class MainActivity : Activity() {
         dashboardButton.visibility = if (store.hub.isNotEmpty()) View.VISIBLE else View.GONE
     }
 
-    /** The mark: a light curve with a dip in it. */
-    private class Mark(ctx: Activity) : View(ctx) {
-        private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        private val ink = ctx.getColor(R.color.ink)
-        private val dip = ctx.getColor(R.color.mark)
-        private val d = ctx.resources.displayMetrics.density
-        private val ys = floatArrayOf(5f, 4f, 6f, 15f, 16f, 7f, 4f)
-
-        override fun onMeasure(w: Int, h: Int) = setMeasuredDimension((66 * d).toInt(), (22 * d).toInt())
-
-        override fun onDraw(c: Canvas) {
-            for ((i, y) in ys.withIndex()) {
-                paint.color = if (i == 3 || i == 4) dip else ink
-                c.drawCircle((4 + i * 9.5f) * d, y * d, 3f * d, paint)
-            }
-        }
+    /** The mark: the light curve. */
+    private fun mark() = ImageView(this).apply {
+        setImageResource(R.drawable.mark)
+        contentDescription = null
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
     }
 }
