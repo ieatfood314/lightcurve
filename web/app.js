@@ -4,7 +4,7 @@
 /* ---- small tools ---- */
 const $ = (id) => document.getElementById(id);
 const NS = "http://www.w3.org/2000/svg";
-const CATS = ["make", "watch", "talk", "play", "browse", "other"];
+const CATS = ["make", "talk", "other", "browse", "watch", "play"]; // good to bad
 const CAT_NAME = { make: "Make", watch: "Watch", talk: "Talk", play: "Play", browse: "Browse", other: "Other" };
 const CAT_ABOUT = {
   make: "Writing, building, coding", watch: "Video, feeds, reading", talk: "Messages, mail, calls",
@@ -72,10 +72,47 @@ const key = (cat) => el("i", { class: `key b-${cat}` });
 
 /* ---- state ---- */
 const state = {
-  view: "day", date: null, days: Number(localStorage.getItem("lightcurve-days")) || 28,
+  view: "day", date: null, device: null, days: Number(localStorage.getItem("lightcurve-days")) || 28,
   day: null, range: null, devices: null, allDay: false, allApps: false, first: true,
 };
 const devName = (id) => (state.day && state.day.devices.find((d) => d.id === id) || {}).name || id;
+const devKind = (id) => ((state.devices && state.devices.devices.find((d) => d.id === id)) || (state.day && state.day.devices.find((d) => d.id === id)) || {}).kind || "desktop";
+
+/* ---- devices: an icon for each kind, and the row that picks one ---- */
+const DEV_PATHS = {
+  desktop: ["M3 4.5h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z", "M7.5 18h5M10 14.5V18"],
+  laptop: ["M4.5 5h11a1 1 0 0 1 1 1v7.5h-13V6a1 1 0 0 1 1-1z", "M1.5 13.5h17l-1 2.5h-15z"],
+  phone: ["M7 2h6a1.5 1.5 0 0 1 1.5 1.5v13A1.5 1.5 0 0 1 13 18H7a1.5 1.5 0 0 1-1.5-1.5v-13A1.5 1.5 0 0 1 7 2z", "M9 15.5h2"],
+  tablet: ["M5 2.5h10a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 16V4A1.5 1.5 0 0 1 5 2.5z", "M9 15h2"],
+};
+function devIcon(kind, title) {
+  const s = sv("svg", { class: "dev-icon", viewBox: "0 0 20 20", "aria-hidden": title ? null : "true" });
+  if (title) s.append(sv("title", {}, title));
+  for (const d of DEV_PATHS[kind] || DEV_PATHS.desktop) s.append(sv("path", { d }));
+  return s;
+}
+/** Small icons for the devices something was used on, when more than one device is in play. */
+function deviceIcons(ids) {
+  if (!ids || state.device) return null;
+  const known = (state.day ? state.day.devices : []).filter((d) => d.seconds > 0);
+  if (known.length < 2 && !(state.range && state.range.devices.filter((d) => d.seconds > 0).length > 1)) return null;
+  return el("span", { class: "devs" }, ids.map((id) => devIcon(devKind(id), devName(id))));
+}
+/** All, then each device with time in what's showing. Picking one narrows every view to it. */
+function renderWho(list, allSeconds) {
+  const shown = list.filter((d) => d.seconds > 0 || d.id === state.device);
+  for (const host of document.querySelectorAll(`#v-${state.view} .who-row`)) {
+    clear(host);
+    if (shown.length < 2 && !state.device) continue;
+    const pick = (id) => () => { if (state.device === id) return; state.device = id; state.allDay = state.allApps = false; load("all"); };
+    host.append(el("button", { type: "button", class: "who", "aria-pressed": String(!state.device), onclick: pick(null) },
+      "All", el("b", { text: dur(allSeconds) })));
+    for (const d of shown) {
+      host.append(el("button", { type: "button", class: "who", "aria-pressed": String(state.device === d.id), onclick: pick(d.id) },
+        devIcon(d.kind), d.name, el("b", { text: dur(d.seconds) })));
+    }
+  }
+}
 
 async function api(path, opts) {
   const r = await fetch(path, opts && { method: opts.method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(opts.body) });
@@ -88,10 +125,11 @@ async function load(what = "all") {
   document.body.classList.add("loading");
   try {
     const jobs = [];
-    const q = state.date ? `date=${state.date}` : "";
+    const dev = state.device ? `&device=${encodeURIComponent(state.device)}` : "";
+    const q = (state.date ? `date=${state.date}` : "") + dev;
     if (what !== "range") jobs.push(api(`/api/day?${q}`).then((d) => { state.day = d; if (!state.date) state.date = d.date; }));
     if (what === "all" || what === "range") {
-      jobs.push(api(`/api/range?days=${state.days}${state.date ? `&end=${state.date}` : ""}`).then((r) => { state.range = r; }));
+      jobs.push(api(`/api/range?days=${state.days}${state.date ? `&end=${state.date}` : ""}${dev}`).then((r) => { state.range = r; }));
     }
     if (what === "all") jobs.push(api("/api/devices").then((d) => { state.devices = d; }));
     await Promise.all(jobs);
@@ -260,7 +298,10 @@ function renderDayChart() {
   strips.forEach((st, k) => {
     const y = stripsTop + k * stripGap;
     const dev = d.devices.find((v) => v.id === st.device) || { name: st.device };
-    svg.append(sv("text", { class: "name", x: 0, y: y - 7 }, dev.name));
+    const ic = devIcon(devKind(st.device));
+    for (const [k3, v3] of Object.entries({ x: 0, y: y - 20, width: 15, height: 15 })) ic.setAttribute(k3, v3);
+    ic.classList.add("strip-icon");
+    svg.append(ic, sv("text", { class: "name", x: 21, y: y - 7 }, dev.name));
     svg.append(sv("text", { x: W, y: y - 7, "text-anchor": "end" }, dur(st.seconds)));
     svg.append(sv("rect", { class: "track", x: 0, y, width: W, height: stripH, rx: 3 }));
     const note = (d.notes || []).find((nn) => nn.device === st.device);
@@ -342,7 +383,7 @@ function appRows(list, rows, limit, scope) {
   const max = rows[0] ? rows[0].seconds : 1;
   for (const e of rows.slice(0, limit)) {
     list.append(el("li", {}, el("button", { type: "button", class: "thing", onclick: () => openSheet(e, scope), "aria-label": `${e.label}, ${dur(e.seconds)}, ${CAT_NAME[e.cat]}` },
-      el("span", { class: "who" }, key(e.cat), el("span", { class: "label", text: e.label }), e.blocked ? lockIcon() : null),
+      el("span", { class: "nm" }, key(e.cat), el("span", { class: "label", text: e.label }), e.blocked ? lockIcon() : null, deviceIcons(e.devices)),
       el("span", {}, el("span", { class: `bar-fill b-${e.cat}`, style: `width:${Math.max(1, (e.seconds / max) * 100)}%` })),
       el("span", { class: "time", text: dur(e.seconds) }))));
   }
@@ -554,7 +595,7 @@ function renderBurns() {
 function candidateRow(e) {
   const li = el("li");
   const open = el("button", { type: "button", class: "btn burnish", text: "Block" });
-  li.append(el("span", { class: "who" }, key(e.cat), el("span", { text: e.label })), el("span", { class: "time", text: dur(e.seconds) }), open);
+  li.append(el("span", { class: "nm" }, key(e.cat), el("span", { text: e.label })), el("span", { class: "time", text: dur(e.seconds) }), open);
   open.addEventListener("click", () => {
     open.remove();
     for (const p of e.parts.filter((x) => !x.blocked)) {
@@ -672,6 +713,8 @@ function render() {
     if (b.dataset.view === state.view) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
   }
   for (const b of document.querySelectorAll(".seg button")) b.setAttribute("aria-pressed", String(Number(b.dataset.days) === state.days));
+  if (state.view === "day") renderWho(d.devices, d.all_seconds);
+  else if (r && state.view !== "devices") renderWho(r.devices, r.all_seconds);
   if (state.view === "day") { renderHeadline(); renderDayChart(); renderStats(); renderDayApps(); state.first = false; }
   else if (state.view === "weeks" && r) renderWeeks();
   else if (state.view === "apps" && r) renderApps();

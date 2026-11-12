@@ -243,6 +243,34 @@ class Legacy(Base):
         self.assertEqual(rows, {"Zen": 2700, "Printables.com": 900})
 
 
+class OneDevice(Base):
+    def setUp(self):
+        super().setUp()
+        a = self.a = at("2026-03-10", 14)
+        self.send("desk-1", [(a, a + 3600, "kitty", "")], now=a + 8000)
+        self.send("phone-1", [(a + 1800, a + 4800, "com.reddit.frontpage", "")], kind="phone", now=a + 8000,
+                  pickups=[ms(a + 1800)])
+
+    def test_the_day_as_one_device_saw_it(self):
+        r = core.day_report(self.db, "2026-03-10", now=self.a + 8000, device="phone-1")
+        self.assertEqual(r["lit"], 3000)
+        self.assertEqual(len(r["entities"]), 1)
+        self.assertEqual(r["attention"]["pickups"], 1)
+        self.assertEqual({d["id"]: d["seconds"] for d in r["devices"]}, {"desk-1": 3600, "phone-1": 3000})
+
+    def test_every_device_together(self):
+        r = core.day_report(self.db, "2026-03-10", now=self.a + 8000)
+        self.assertEqual(r["lit"], 4800)
+
+    def test_a_range_for_one_device(self):
+        cache = core.Cache()
+        r = core.range_report(self.db, "2026-03-10", 7, cache, now=self.a + 90000, device="desk-1")
+        self.assertEqual(r["rows"][-1]["lit"], 3600)
+        self.assertEqual({d["id"]: d["seconds"] for d in r["devices"]}, {"desk-1": 3600, "phone-1": 3000})
+        everyone = core.range_report(self.db, "2026-03-10", 7, cache, now=self.a + 90000)
+        self.assertEqual(everyone["rows"][-1]["lit"], 4800)  # the cache keeps the two apart
+
+
 class Rules(Base):
     def test_a_browser_is_a_browser_whatever_the_phone_calls_it(self):
         a = at("2026-03-10", 14)
@@ -250,6 +278,13 @@ class Rules(Base):
                   names={"org.mozilla.firefox": {"label": "Firefox", "hint": "talk"}})
         r = core.day_report(self.db, "2026-03-10", now=a + 4000)
         self.assertEqual(r["entities"][0]["cat"], "browse")
+
+    def test_old_phone_apps_cannot_send_all_night_spans(self):
+        a = at("2026-03-10", 1)
+        body = {"device": {"id": "phone-1", "kind": "phone", "version": "1.0.1"},
+                "spans": [[ms(a), ms(a + 30000), "x.blocker", ""], [ms(a + 30000), ms(a + 30600), "x.app", ""]]}
+        core.ingest(self.db, body, now=a + 40000)
+        self.assertEqual([r[0] for r in self.db.execute("SELECT app FROM spans")], ["x.app"])
 
     def test_a_device_can_replace_what_it_sent(self):
         a = at("2026-03-10", 14)

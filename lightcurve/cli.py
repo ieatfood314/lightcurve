@@ -34,8 +34,8 @@ lightcurve: when your screens were lit, and what was on them
 Add --json to any report for the numbers behind it.
 """
 
-SKY = {"make": (40, 150, 245), "watch": (164, 76, 29), "talk": (17, 149, 124), "play": (213, 100, 192),
-       "browse": (169, 145, 43), "other": (130, 130, 130)}
+SKY = {"make": (55, 108, 219), "talk": (47, 166, 175), "other": (130, 130, 130), "browse": (169, 146, 1),
+       "watch": (180, 79, 0), "play": (237, 88, 122)}
 INITIAL = {c[0]: c for c in core.CATEGORIES}
 BLOCKS = " ▁▂▃▄▅▆▇█"
 WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
@@ -217,7 +217,7 @@ def show_day(out, s):
     print(out.paint(" · ".join(bits), dim=True))
     for b in s.get("burns") or []:
         state = "burning now" if b.get("live") else "burn"
-        print(out.paint(f"{state} {clock(s['t0'], b['start'])} to {clock(s['t0'], b['end'])}", (226, 58, 41)))
+        print(out.paint(f"{state} {clock(s['t0'], b['start'])} to {clock(s['t0'], b['end'])}", (235, 235, 235)))
     for n in s.get("notes") or []:
         print(out.paint(f"{n['name']} hasn't reported since {clock(s['t0'], max(0, n['since']))}, "
                         "so this may be short.", dim=True))

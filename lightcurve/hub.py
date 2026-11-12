@@ -42,11 +42,16 @@ class Hub:
             return v
         return core.today()
 
+    def _device(self, q):
+        v = (q.get("device") or [""])[0]
+        return v if re.match(r"^[A-Za-z0-9._:-]{3,64}$", v) else None
+
     def day(self, q):
         date = self._date(q)
         with self.lock:
             r = core.day_report(self.db, date, self.cache, burns=self.ignition.burns(),
-                                blocked=self.ignition.blocked_test() if self.ignition.connected else None)
+                                blocked=self.ignition.blocked_test() if self.ignition.connected else None,
+                                device=self._device(q))
         r["ignition"] = self.ignition_status()
         r["first_day"] = self.first_day()
         return r
@@ -59,7 +64,8 @@ class Hub:
             days = 28
         with self.lock:
             r = core.range_report(self.db, end, days, self.cache, burns=self.ignition.burns(),
-                                  blocked=self.ignition.blocked_test() if self.ignition.connected else None)
+                                  blocked=self.ignition.blocked_test() if self.ignition.connected else None,
+                                  device=self._device(q))
         for e in r["candidates"]:
             for p in e["parts"]:
                 p["list"], p["value"] = self.ignition.suggest(p)

@@ -23,7 +23,7 @@ SITTING_GAP = 300  # a break shorter than this doesn't end a sitting
 BASELINE_DAYS = 28
 MIN_BASELINE = 5  # fewer days of history than this and "usual" isn't claimed
 
-CATEGORIES = ("make", "watch", "talk", "play", "browse", "other")
+CATEGORIES = ("make", "talk", "other", "browse", "watch", "play")  # good to bad
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS devices (
@@ -435,17 +435,33 @@ def sessions_of(spans, namer):
 class DayData:
     """Everything worked out for one day. Built once per day and cached by the hub."""
 
-    def __init__(self, db, date, namer, now=None):
+    def __init__(self, db, date, namer, now=None, device=None):
+        """With `device`, the day as that one device saw it; the per-device totals still cover them all."""
         self.date = date
+        self.device = device
         self.t0, self.t1 = day_bounds(date)
         self.now = now if now is not None else time.time()
         self.end = max(self.t0, min(self.t1, self.now))
-        self.spans = load_spans(db, self.t0, self.end)
-        self.pickups = load_pickups(db, self.t0, self.end)
+        spans = load_spans(db, self.t0, self.end)
         self.namer = namer
         by_device = {}
-        for device, a, b, _, _ in self.spans:
-            by_device.setdefault(device, []).append((a, b))
+        for d, a, b, _, _ in spans:
+            by_device.setdefault(d, []).append((a, b))
+        # waytime's totals stand in for a computer on the days it kept no spans of its own
+        rows = [r for r in db.execute("SELECT device, app, seconds FROM legacy WHERE date = ?", (date,)).fetchall()
+                if r[0] not in by_device]
+        self.all_device_seconds = {d: total(merge(iv)) for d, iv in by_device.items()}
+        for d in {r[0] for r in rows}:
+            self.all_device_seconds[d] = legacy_things([r for r in rows if r[0] == d])[0]
+        # every device together: screens on at once count once; waytime totals simply add
+        self.all_seconds = total(merge([iv for ivs in by_device.values() for iv in ivs])) + sum(
+            v for d, v in self.all_device_seconds.items() if d not in by_device)
+        if device:
+            spans = [sp for sp in spans if sp[0] == device]
+            by_device = {d: iv for d, iv in by_device.items() if d == device}
+            rows = [r for r in rows if r[0] == device]
+        self.spans = spans
+        self.pickups = [p for p in load_pickups(db, self.t0, self.end) if not device or p[0] == device]
         self.device_lit = {d: merge(iv) for d, iv in by_device.items()}
         self.lit = merge([iv for ivs in self.device_lit.values() for iv in ivs])
         self.lit_seconds = total(self.lit)
@@ -454,9 +470,7 @@ class DayData:
         self.cat_seconds = dict.fromkeys(CATEGORIES, 0.0)
         for _, a, b, app, site in self.spans:
             self.cat_seconds[namer.category(app, site)] += b - a
-        # waytime's totals stand in for a computer on the days it kept no spans of its own
-        rows = db.execute("SELECT device, app, seconds FROM legacy WHERE date = ?", (date,)).fetchall()
-        self.legacy = [r for r in rows if r[0] not in by_device] or None
+        self.legacy = rows or None
 
     @property
     def has_data(self):
@@ -513,11 +527,11 @@ def _fmt_parts(parts, label, cat, blocked):
     return out
 
 
-def day_report(db, date, cache=None, now=None, burns=(), blocked=None):
+def day_report(db, date, cache=None, now=None, burns=(), blocked=None, device=None):
     """The full account of one day, as plain data for the dashboard and the CLI."""
     now = now if now is not None else time.time()
     namer = Namer(db)
-    day = DayData(db, date, namer, now)
+    day = DayData(db, date, namer, now, device)
     t0, t1 = day.t0, day.t1
     devs = devices(db)
     dev_by_id = {d["id"]: d for d in devs}
@@ -626,7 +640,8 @@ def day_report(db, date, cache=None, now=None, burns=(), blocked=None):
         "curve": curve, "strips": strips, "entities": entities,
         "categories": {c: round(s) for c, s in day.cat_seconds.items()},
         "devices": [{"id": d["id"], "name": d["name"], "kind": d["kind"],
-                     "seconds": round(total(day.device_lit.get(d["id"], [])))} for d in devs],
+                     "seconds": round(day.all_device_seconds.get(d["id"], 0))} for d in devs],
+        "device": device, "all_seconds": round(day.all_seconds),
         "attention": {
             "switches": metrics["switches"], "switch_rate": metrics["switch_rate"],
             "sittings": len(day.sittings),
@@ -666,8 +681,8 @@ def day_report(db, date, cache=None, now=None, burns=(), blocked=None):
                                 "end": round(burn["end"] - t0), "minutes": burn.get("minutes"),
                                 "early": bool(burn.get("early")), "live": bool(burn.get("live"))})
 
-    report["usual"] = usual(db, date, day, cache, now)
-    report["notes"] = coverage_notes(devs, day, now)
+    report["usual"] = usual(db, date, day, cache, now, device)
+    report["notes"] = coverage_notes([d for d in devs if not device or d["id"] == device], day, now)
     return report
 
 
@@ -698,16 +713,16 @@ class Cache:
         self.days = {}
         self.lock = threading.Lock()
 
-    def get(self, db, date, now):
+    def get(self, db, date, now, device=None):
         t0, t1 = day_bounds(date)
         if now < t1 + 3600:  # still filling in, or late syncs still likely
-            return DayData(db, date, Namer(db), now)
+            return DayData(db, date, Namer(db), now, device)
         with self.lock:
-            day = self.days.get(date)
+            day = self.days.get((date, device))
         if day is None:
-            day = DayData(db, date, Namer(db), now)
+            day = DayData(db, date, Namer(db), now, device)
             with self.lock:
-                self.days[date] = day
+                self.days[(date, device)] = day
         return day
 
     def drop(self, dates=None):
@@ -715,16 +730,17 @@ class Cache:
             if dates is None:
                 self.days.clear()
             else:
-                for d in dates:
-                    self.days.pop(d, None)
+                dates = set(dates)
+                for k in [k for k in self.days if k[0] in dates]:
+                    del self.days[k]
 
 
-def usual(db, date, day, cache, now):
+def usual(db, date, day, cache, now, device=None):
     """What these numbers usually are: the median of the 28 days before, for days that have data."""
     cache = cache or Cache()
     prior = []
     for i in range(1, BASELINE_DAYS + 1):
-        d = cache.get(db, shift(date, -i), now)
+        d = cache.get(db, shift(date, -i), now, device)
         if d.has_data:
             prior.append(d)
     out = {"days": len(prior), "enough": len(prior) >= MIN_BASELINE}
@@ -741,7 +757,7 @@ def usual(db, date, day, cache, now):
     # the last two weeks of each, oldest first, for the small trend lines
     recent = []
     for i in range(14, 0, -1):
-        d = cache.get(db, shift(date, -i), now)
+        d = cache.get(db, shift(date, -i), now, device)
         recent.append(d.metrics() if d.has_data else None)
     out["recent"] = {k: [round(m[k], 2) if m and m[k] is not None else None for m in recent]
                      for k in ("lit", "switch_rate", "longest_sitting", "pickups", "first", "last")}
@@ -809,7 +825,7 @@ def legacy_things(rows):
 
 # ---- many days ----
 
-def range_report(db, end_date, days, cache=None, now=None, burns=(), blocked=None):
+def range_report(db, end_date, days, cache=None, now=None, burns=(), blocked=None, device=None):
     """Patterns over a run of days ending on `end_date`."""
     now = now if now is not None else time.time()
     cache = cache or Cache()
@@ -826,7 +842,7 @@ def range_report(db, end_date, days, cache=None, now=None, burns=(), blocked=Non
     all_spans = []
     legacy_apps = {}
     for date in dates:
-        day = cache.get(db, date, now)
+        day = cache.get(db, date, now, device)
         t0, t1 = day.t0, day.t1
         nb = max(1, round((t1 - t0) / BIN))
         row = {"date": date, "lit": round(day.lit_seconds), "has_data": day.has_data,
@@ -834,7 +850,8 @@ def range_report(db, end_date, days, cache=None, now=None, burns=(), blocked=Non
                "first": round(day.lit[0][0] - t0) if day.lit else None,
                "last": round(day.lit[-1][1] - t0) if day.lit else None,
                "pickups": len(day.pickups), "cats": {c: round(s) for c, s in day.cat_seconds.items()},
-               "devices": {d: round(total(iv)) for d, iv in day.device_lit.items()},
+               "devices": {d: round(v) for d, v in day.all_device_seconds.items()},
+               "all_seconds": round(day.all_seconds),
                "burn_seconds": 0, "legacy": False}
         if day.legacy:
             seconds, things = legacy_things(day.legacy)
@@ -915,6 +932,7 @@ def range_report(db, end_date, days, cache=None, now=None, burns=(), blocked=Non
         "devices": [{"id": d["id"], "name": d["name"], "kind": d["kind"],
                      "seconds": sum(r["devices"].get(d["id"], 0) for r in rows)} for d in devs],
         "pickups": sum(r["pickups"] for r in rows),
+        "device": device, "all_seconds": sum(r["all_seconds"] for r in rows),
         # waytime totals in these days, by name: [label, seconds, category]
         "legacy_apps": sorted(([l, round(sec), c] for l, sec, c in legacy_apps.values()), key=lambda r: -r[1]),
     }
@@ -1004,6 +1022,12 @@ def ingest(db, body, now=None):
     limit = ms_now + 300_000  # nothing from the future, give or take a wrong clock
     touched = set()
 
+    # Phone apps before 1.0.2 counted an app that opened behind a dark screen until the screen next came on,
+    # which could be all night. Their long spans can't be trusted.
+    try:
+        old_phone = kind == "phone" and tuple(int(x) for x in str(dev.get("version") or "").split(".")[:3]) < (1, 0, 2)
+    except ValueError:
+        old_phone = False
     spans = []
     for row in (body.get("spans") or [])[:50000]:
         try:
@@ -1012,6 +1036,8 @@ def ingest(db, body, now=None):
         except (TypeError, ValueError, IndexError):
             continue
         if not app or end <= start or start < 946684800000 or end > limit or end - start > 86_400_000:
+            continue
+        if old_phone and end - start > 7_200_000:
             continue
         spans.append((dev_id, start, end, app, site))
         touched.add(day_of(start / 1000))
