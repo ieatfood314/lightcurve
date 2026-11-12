@@ -18,10 +18,10 @@
   /* Good to bad: make, talk, other, browse, watch, play. */
   --make: #376cdb;
   --talk: #2fa6af;
-  --other: #5f5f5f;
-  --browse: #a99201;
-  --watch: #b44f00;
-  --play: #ed587a;
+  --other: #6c6c6c;
+  --browse: #f2c230;
+  --watch: #ee7d1a;
+  --play: #d42a2a;
   --dark: 1;
   --sans: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --pad: clamp(16px, 4vw, 44px);
@@ -33,7 +33,7 @@
     --field: #e0e4df; --well: #d2d8d2; --raised: #eaede9; --line: #b4bcb5; --line-soft: #c9cfc9;
     --ink: #16171c; --ink-2: #454950; --ink-3: #6c7277;
     --burn: #141414; --burn-wash: rgba(20, 20, 20, .07); --alert: #c2281a;
-    --make: #007ce9; --talk: #19c3b8; --other: #848484; --browse: #c5ad29; --watch: #894300; --play: #ec424a;
+    --make: #007ce9; --talk: #19b5ab; --other: #7d7d7d; --browse: #eab308; --watch: #e8700e; --play: #c01a1a;
     --dark: 0;
     color-scheme: light;
   }
@@ -42,7 +42,7 @@
   --field: #e0e4df; --well: #d2d8d2; --raised: #eaede9; --line: #b4bcb5; --line-soft: #c9cfc9;
   --ink: #16171c; --ink-2: #454950; --ink-3: #6c7277;
   --burn: #141414; --burn-wash: rgba(20, 20, 20, .07); --alert: #c2281a;
-  --make: #007ce9; --talk: #19c3b8; --other: #848484; --browse: #c5ad29; --watch: #894300; --play: #ec424a;
+  --make: #007ce9; --talk: #19b5ab; --other: #7d7d7d; --browse: #eab308; --watch: #e8700e; --play: #c01a1a;
   --dark: 0;
   color-scheme: light;
 }
