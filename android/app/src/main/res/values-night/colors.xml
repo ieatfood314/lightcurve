@@ -1,11 +1,11 @@
 <resources>
-    <!-- sky: the night itself -->
-    <color name="field">#12173B</color>
-    <color name="well">#0C1030</color>
-    <color name="line">#3A4172</color>
-    <color name="ink">#F1EDDD</color>
-    <color name="ink2">#B4B5C8</color>
-    <color name="mark">#6DB8FA</color>
-    <color name="warn">#FF8A70</color>
+    <!-- dark: true black -->
+    <color name="field">#000000</color>
+    <color name="well">#121212</color>
+    <color name="line">#303030</color>
+    <color name="ink">#FFFFFF</color>
+    <color name="ink2">#A8A8A8</color>
+    <color name="mark">#2896F5</color>
+    <color name="warn">#FF5A47</color>
     <bool name="light_bars">false</bool>
 </resources>

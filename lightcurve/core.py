@@ -14,7 +14,7 @@ import statistics
 import threading
 import time
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 DAY_START_HOUR = 4  # a day runs 04:00 to 04:00, so a late night stays with the day it belongs to
 BIN = 600  # seconds per light-curve point
@@ -254,7 +254,7 @@ _RULES = {
         "discord com.discordapp.discord vesktop dev.vencord.vesktop signal org.signal.signal org.thoughtcrime.securesms "
         "whatsapp com.whatsapp telegram org.telegram.desktop org.telegram.messenger element im.riot.riot "
         "thunderbird org.mozilla.thunderbird gmail com.google.android.gm proton mail ch.protonmail.android outlook "
-        "slack com.slack microsoft teams zoom us.zoom.videomeetings google meet messenger com.facebook.orca "
+        "slack com.slack microsoft teams com.microsoft.teams zoom us.zoom.videomeetings google meet messenger com.facebook.orca "
         "com.google.android.apps.messaging com.google.android.dialer org.kde.kdeconnect.sms kdeconnect-sms "
         "com.snapchat.android snapchat mail kmail org.kde.kmail2 geary com.google.android.contacts"
     ),
@@ -346,13 +346,14 @@ class Namer:
             return BUILTIN[a]
         if _GAME_RE.match(a):
             return "play"
-        label, hint = self.names.get(app, ("", ""))
-        if hint in HINTS:
-            return hint
-        if label and label.lower() in BUILTIN:
-            return BUILTIN[label.lower()]
         if a in BROWSERS:
             return "browse"
+        # what the phone says an app is comes last: Android's categories are loose
+        label, hint = self.names.get(app, ("", ""))
+        if label and label.lower() in BUILTIN:
+            return BUILTIN[label.lower()]
+        if hint in HINTS:
+            return hint
         return "other"
 
 
@@ -453,11 +454,9 @@ class DayData:
         self.cat_seconds = dict.fromkeys(CATEGORIES, 0.0)
         for _, a, b, app, site in self.spans:
             self.cat_seconds[namer.category(app, site)] += b - a
-        self.legacy = None
-        if not self.spans:
-            rows = db.execute("SELECT device, app, seconds FROM legacy WHERE date = ?", (date,)).fetchall()
-            if rows:
-                self.legacy = rows
+        # waytime's totals stand in for a computer on the days it kept no spans of its own
+        rows = db.execute("SELECT device, app, seconds FROM legacy WHERE date = ?", (date,)).fetchall()
+        self.legacy = [r for r in rows if r[0] not in by_device] or None
 
     @property
     def has_data(self):
@@ -767,6 +766,20 @@ def coverage_notes(devs, day, now):
     return notes
 
 
+_FILE_RE = re.compile(r"\.(docx?|pdf|xlsx?|pptx?|od[tsp]|txt|md|png|jpe?g|stl|3mf|step)$")
+_DOMAIN_RE = re.compile(r"^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,6}$")
+
+
+def _legacy_site(name):
+    """waytime kept the last piece of any browser title as a "site", documents and all. Keep the real sites."""
+    n = name.lower()
+    if n in KNOWN_SITES:
+        return True
+    if " " in name or _FILE_RE.search(n):
+        return False
+    return name.isalpha() or bool(_DOMAIN_RE.match(n))
+
+
 def legacy_things(rows):
     """Daily totals carried over from waytime: (seconds, {(app, site): seconds}).
 
@@ -782,9 +795,12 @@ def legacy_things(rows):
             apps[app] = apps.get(app, 0) + seconds
     things = {(a, ""): s for a, s in apps.items() if a not in BROWSERS}
     browser = sum(s for a, s in apps.items() if a in BROWSERS)
+    kept = 0
     for site, s in sites.items():
-        things[("browser", site)] = s
-    rest = browser - sum(sites.values())
+        if _legacy_site(site):
+            things[("browser", site)] = s
+            kept += s
+    rest = browser - kept
     if rest > 60:
         main = max((a for a in apps if a in BROWSERS), key=lambda a: apps[a])
         things[(main, "")] = rest
@@ -808,6 +824,7 @@ def range_report(db, end_date, days, cache=None, now=None, burns=(), blocked=Non
     week = [[0.0] * 24 for _ in range(7)]
     week_days = [0] * 7
     all_spans = []
+    legacy_apps = {}
     for date in dates:
         day = cache.get(db, date, now)
         t0, t1 = day.t0, day.t1
@@ -820,8 +837,14 @@ def range_report(db, end_date, days, cache=None, now=None, burns=(), blocked=Non
                "devices": {d: round(total(iv)) for d, iv in day.device_lit.items()},
                "burn_seconds": 0, "legacy": False}
         if day.legacy:
+            seconds, things = legacy_things(day.legacy)
             row["legacy"] = True
-            row["lit"] = round(legacy_things(day.legacy)[0])
+            row["legacy_seconds"] = round(seconds)
+            row["lit"] += round(seconds)
+            for (app, site), sec in things.items():
+                label = namer.label(app, site)
+                item = legacy_apps.setdefault(label.lower(), [label, 0, namer.category(app, site)])
+                item[1] += sec
         lit = [0.0] * nb
         cat = [dict() for _ in range(nb)]
         for _, a, b, app, site in day.spans:
@@ -892,6 +915,8 @@ def range_report(db, end_date, days, cache=None, now=None, burns=(), blocked=Non
         "devices": [{"id": d["id"], "name": d["name"], "kind": d["kind"],
                      "seconds": sum(r["devices"].get(d["id"], 0) for r in rows)} for d in devs],
         "pickups": sum(r["pickups"] for r in rows),
+        # waytime totals in these days, by name: [label, seconds, category]
+        "legacy_apps": sorted(([l, round(sec), c] for l, sec, c in legacy_apps.values()), key=lambda r: -r[1]),
     }
     out["ignition"] = ignition_report(all_spans, namer, rows, burns, t_start, t_end, now)
     out["candidates"] = [e for e in census if e["cat"] in ("watch", "play", "browse") and not e["blocked"]
@@ -1012,6 +1037,17 @@ def ingest(db, body, now=None):
             # The device vouches that it has now sent everything it knows up to this moment.
             db.execute("UPDATE devices SET synced_to = ?, active_at_sync = ? WHERE id = ?",
                        (ms_now, 1 if body.get("active") else 0, dev_id))
+        try:
+            replace_from = int(body.get("replace_from") or 0)
+        except (TypeError, ValueError):
+            replace_from = 0
+        if replace_from > 946684800000:
+            # The device has rebuilt its record from here on under better rules: its old spans go.
+            db.execute("DELETE FROM spans WHERE device = ? AND start >= ?", (dev_id, replace_from))
+            day = day_of(replace_from / 1000)
+            while day <= day_of(now):
+                touched.add(day)
+                day = shift(day, 1)
         db.executemany(
             "INSERT INTO spans (device, start, end, app, site) VALUES (?,?,?,?,?) "
             "ON CONFLICT(device, start) DO UPDATE SET end = excluded.end, app = excluded.app, site = excluded.site",

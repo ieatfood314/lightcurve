@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>lightcurve</title>
 <meta name="color-scheme" content="dark light">
-<meta name="theme-color" content="#12173b">
+<meta name="theme-color" content="#000000">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="preload" href="fonts/archivo.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
 <script>
-  // Sky or plate, before the first paint.
+  // Dark or light, before the first paint.
   (function () {
     var t = localStorage.getItem("lightcurve-theme");
     if (t === "sky" || t === "plate") document.documentElement.dataset.theme = t;
@@ -19,99 +19,78 @@
 </script>
 </head>
 <body>
-<a class="skip" href="#day">Skip to the day</a>
-
 <header class="bar">
-  <a class="mark" href="#" id="home" aria-label="lightcurve, go to today">
+  <a class="mark" href="#" id="home" aria-label="lightcurve, today">
     <svg viewBox="0 0 44 20" width="44" height="20" aria-hidden="true">
       <circle cx="3" cy="5" r="2"/><circle cx="9" cy="4" r="2"/><circle cx="15" cy="6" r="2"/>
       <circle cx="21" cy="14" r="2"/><circle cx="27" cy="15" r="2"/><circle cx="33" cy="7" r="2"/><circle cx="39" cy="4" r="2"/>
     </svg>
     <span>lightcurve</span>
   </a>
-  <nav class="when" aria-label="Day">
-    <button id="prev" type="button" aria-label="The day before" title="The day before (←)">
-      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </button>
-    <button id="pick" type="button" class="date" aria-label="Pick a day"><span id="date-label">Today</span></button>
-    <input id="date-input" type="date" tabindex="-1" aria-hidden="true">
-    <button id="next" type="button" aria-label="The day after" title="The day after (→)">
-      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="m6 3 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </button>
-    <button id="today" type="button" class="quiet">Today</button>
+  <nav class="tabs" aria-label="Views">
+    <button type="button" data-view="day">Day</button>
+    <button type="button" data-view="weeks">Weeks</button>
+    <button type="button" data-view="apps">Apps</button>
+    <button type="button" data-view="burns">Burns</button>
   </nav>
   <div class="tools">
-    <div class="seg" role="group" aria-label="How far back the patterns look">
-      <button type="button" data-days="7">7 days</button>
-      <button type="button" data-days="28">28 days</button>
-      <button type="button" data-days="90">90 days</button>
-    </div>
-    <button id="theme" type="button" class="icon" aria-label="Switch between sky and plate">
+    <button type="button" class="icon" data-view="devices" aria-label="Devices" title="Devices">
+      <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="2" y="4" width="11" height="8" rx="1.2"/><path d="M5 15h5" stroke-linecap="round"/><rect x="14.5" y="7" width="4" height="9" rx="1"/></svg>
+    </button>
+    <button id="theme" type="button" class="icon" aria-label="Dark or light" title="Dark or light">
       <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg>
     </button>
   </div>
 </header>
 
 <main>
-  <section id="day" class="day" aria-live="polite">
-    <div class="headline">
-      <h1 id="day-title">&nbsp;</h1>
-      <p class="figure"><span id="lit">&nbsp;</span> <span class="unit" id="lit-unit"></span></p>
-      <p class="finding" id="finding"></p>
-    </div>
+  <section id="v-day" class="view" aria-live="polite">
+    <nav class="when" aria-label="Day">
+      <button id="prev" type="button" aria-label="Day before">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button id="pick" type="button" class="date" aria-label="Pick a day"><span id="date-label">Today</span></button>
+      <input id="date-input" type="date" tabindex="-1" aria-hidden="true">
+      <button id="next" type="button" aria-label="Day after">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="m6 3 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button id="today" type="button" class="quiet" hidden>Today</button>
+    </nav>
+    <p class="figure"><span class="num" id="lit">&nbsp;</span><span class="versus" id="versus"></span></p>
     <div id="notes" class="notes"></div>
-    <figure class="curve">
-      <div id="curve" class="plot" role="img" aria-label="Light curve for the day"></div>
+    <figure id="day-figure">
+      <div id="curve" class="plot" role="img" aria-label="Screen time by hour"></div>
       <div id="legend" class="legend"></div>
-      <figcaption id="curve-caption"></figcaption>
     </figure>
+    <dl id="stats" class="stats"></dl>
+    <ol id="things" class="things"></ol>
+    <button type="button" id="more-things" class="quiet more" hidden></button>
   </section>
 
-  <div class="pair">
-    <section id="where">
-      <h2>Where it went</h2>
-      <div id="split"></div>
-      <ol id="things" class="things"></ol>
-      <button type="button" id="more-things" class="quiet" hidden>Show everything</button>
-    </section>
-    <section id="attention">
-      <h2>Attention</h2>
-      <table class="ledger" id="ledger">
-        <thead><tr><th scope="col"><span class="vh">Measure</span></th><th scope="col" id="ledger-day">This day</th><th scope="col">Usual</th><th scope="col" class="trend-h">Last 14 days</th></tr></thead>
-        <tbody></tbody>
-      </table>
-      <p class="caption" id="attention-caption"></p>
-    </section>
-  </div>
-
-  <section id="record-section">
-    <h2 id="record-title">The record</h2>
-    <p class="finding small" id="record-finding"></p>
+  <section id="v-weeks" class="view" hidden>
+    <div class="seg" role="group" aria-label="Range"></div>
+    <p class="figure"><span class="num" id="avg">&nbsp;</span><span class="versus">a day</span></p>
     <div id="record" class="record"></div>
-    <p class="caption">Each row is a day, from 4 in the morning to 4 the next. Brighter means more of those ten minutes were lit; the colour is what most of it went to. Pick a row to open that day.</p>
+    <div id="weeks-legend" class="legend"></div>
   </section>
 
-  <section id="census-section">
-    <h2>The census</h2>
-    <p class="finding small" id="census-finding"></p>
-    <div id="census" class="plot"></div>
-    <p class="caption">Every app and site with more than a minute on it. Further right, a visit lasts longer. Higher up, it adds up to more. A bigger dot was opened more often.</p>
+  <section id="v-apps" class="view" hidden>
+    <div class="seg" role="group" aria-label="Range"></div>
+    <p class="figure"><span class="num" id="apps-total">&nbsp;</span><span class="versus" id="apps-count"></span></p>
+    <div id="apps-split"></div>
+    <ol id="apps-list" class="things"></ol>
+    <button type="button" id="more-apps" class="quiet more" hidden></button>
   </section>
 
-  <section id="burns-section">
-    <h2>Burns</h2>
+  <section id="v-burns" class="view" hidden>
+    <div class="seg" role="group" aria-label="Range"></div>
     <div id="burns"></div>
   </section>
 
-  <section id="devices-section">
-    <h2>Devices</h2>
+  <section id="v-devices" class="view" hidden>
     <div id="devices"></div>
   </section>
 </main>
-
-<footer>
-  <p id="foot"></p>
-</footer>
 
 <div id="tip" class="tip" role="status" hidden></div>
 <div id="sheet" class="sheet" hidden></div>

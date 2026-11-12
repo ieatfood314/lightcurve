@@ -34,8 +34,8 @@ lightcurve: when your screens were lit, and what was on them
 Add --json to any report for the numbers behind it.
 """
 
-SKY = {"make": (40, 150, 245), "watch": (178, 100, 23), "talk": (65, 210, 179), "play": (192, 70, 136),
-       "browse": (190, 163, 51), "other": (130, 136, 150)}
+SKY = {"make": (40, 150, 245), "watch": (164, 76, 29), "talk": (17, 149, 124), "play": (213, 100, 192),
+       "browse": (169, 145, 43), "other": (130, 130, 130)}
 INITIAL = {c[0]: c for c in core.CATEGORIES}
 BLOCKS = " ▁▂▃▄▅▆▇█"
 WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]

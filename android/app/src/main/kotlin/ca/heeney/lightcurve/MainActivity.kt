@@ -141,8 +141,7 @@ class MainActivity : Activity() {
             web.visibility = View.INVISIBLE
             showPanel()
             hubStatus.setTextColor(color(R.color.warn))
-            hubStatus.text = "No answer from ${store.hub}. Is this phone on the same network or tailnet as the hub? " +
-                "Your time is still being kept on the phone and goes up when the hub is back."
+            hubStatus.text = "Hub not reachable. Check Tailscale."
         }
 
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -157,7 +156,7 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun openSettings() = runOnUiThread { showPanel() }
 
-        /** The dashboard has its own sky and plate; the bars around it follow whichever is showing. */
+        /** The dashboard has dark and light; the bars around it follow whichever is showing. */
         @JavascriptInterface
         fun setBars(css: String, dark: Boolean) = runOnUiThread {
             runCatching { Color.parseColor(css.trim()) }.getOrNull()?.let { if (panel.visibility != View.VISIBLE) setBars(it, dark) }
@@ -218,19 +217,18 @@ class MainActivity : Activity() {
         var url = hubField.text.toString().trim().trimEnd('/')
         if (url.isEmpty()) {
             hubStatus.setTextColor(color(R.color.warn))
-            hubStatus.text = "Type the address your hub's dashboard opens at."
+            hubStatus.text = "Enter the hub address."
             return
         }
         if (!url.startsWith("http://") && !url.startsWith("https://")) url = "http://$url"
         hubStatus.setTextColor(color(R.color.ink2))
-        hubStatus.text = "Looking for a hub at $url…"
+        hubStatus.text = "Connecting…"
         thread {
             val ok = Sync.ping(url)
             runOnUiThread {
                 if (!ok) {
                     hubStatus.setTextColor(color(R.color.warn))
-                    hubStatus.text = "Nothing that looks like a lightcurve hub answered at $url. " +
-                        "Check the address, and that this phone can reach it (same network, or your tailnet switched on)."
+                    hubStatus.text = "No hub at that address."
                     return@runOnUiThread
                 }
                 store.hub = url
@@ -305,11 +303,7 @@ class MainActivity : Activity() {
             setPadding(dp(24f), dp(28f), dp(24f), dp(48f))
         }
         col.add(Mark(this), wrap = true)
-        col.add(text("Your phone's hours belong in the record too.", 30f, R.color.ink, serif = true), top = 22f)
-        col.add(text("Three things, and it looks after itself from then on.", 16f, R.color.ink2), top = 10f)
-
-        col.section("Where your hub is")
-        col.add(text("The address its dashboard opens at.", 15f, R.color.ink2), top = 6f)
+        col.section("Hub")
         hubField = field("http://hub:4625", uri = true)
         hubField.setOnEditorActionListener { _, action, _ -> if (action == EditorInfo.IME_ACTION_DONE) { connect(); true } else false }
         col.add(hubField, top = 14f)
@@ -326,11 +320,9 @@ class MainActivity : Activity() {
         col.add(button("Connect", primary = true) { connect() }, top = 14f)
 
         col.section("Usage access")
-        col.add(text("Android keeps its own log of which app was in front and when. lightcurve reads that log and " +
-            "nothing else: it can't see what you did inside an app.", 15f, R.color.ink2), top = 6f)
         accessStatus = text("", 15f, R.color.ink)
-        col.add(accessStatus, top = 12f)
-        accessButton = button("Allow usage access", primary = true) {
+        col.add(accessStatus, top = 6f)
+        accessButton = button("Allow", primary = true) {
             val specific = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, Uri.parse("package:$packageName"))
             runCatching { startActivity(specific) }.onFailure {
                 runCatching { startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
@@ -338,12 +330,12 @@ class MainActivity : Activity() {
         }
         col.add(accessButton, top = 14f)
 
-        col.section("Sending")
+        col.section("Sync")
         syncStatus = text("", 15f, R.color.ink2)
         col.add(syncStatus, top = 6f)
         col.add(button("Send now", primary = false) { sync(quiet = false) }, top = 14f)
 
-        col.section("What this phone is called")
+        col.section("Name")
         nameField = field("phone", uri = false)
         nameField.setOnFocusChangeListener { _, focused -> if (!focused) saveName() }
         nameField.setOnEditorActionListener { v, action, _ ->
@@ -351,9 +343,8 @@ class MainActivity : Activity() {
             false
         }
         col.add(nameField, top = 14f)
-        col.add(text("A name you give it on the dashboard wins over this one.", 14f, R.color.ink2), top = 8f)
 
-        dashboardButton = button("Back to the dashboard", primary = false) {
+        dashboardButton = button("Dashboard", primary = false) {
             if (webReady) hidePanel() else openDashboard()
         }
         col.add(dashboardButton, top = 36f)
@@ -376,24 +367,22 @@ class MainActivity : Activity() {
         if (!nameField.hasFocus()) nameField.setText(store.name)
         if (store.hub.isNotEmpty() && hubStatus.currentTextColor != color(R.color.warn)) {
             hubStatus.setTextColor(color(R.color.ink2))
-            hubStatus.text = "Connected."
+            hubStatus.text = "Connected"
         }
         val access = Collector.hasAccess(this)
-        accessStatus.text = if (access) "Allowed." else "Not allowed yet. In the list that opens, pick lightcurve and switch it on."
+        accessStatus.text = if (access) "Allowed" else "Not allowed"
         accessStatus.setTextColor(color(if (access) R.color.ink else R.color.warn))
         accessButton.visibility = if (access) View.GONE else View.VISIBLE
         val time = DateFormat.getTimeInstance(DateFormat.SHORT)
         val day = DateFormat.getDateInstance(DateFormat.MEDIUM)
         syncStatus.text = when {
-            store.hub.isEmpty() -> "Nothing is sent until there's a hub to send to."
-            !access -> "Nothing can be read until usage access is allowed."
+            store.hub.isEmpty() -> "No hub yet"
+            !access -> "Needs usage access"
             store.lastError.isNotEmpty() && store.lastSync > 0 ->
-                "Last try failed: ${store.lastError}\nLast sent ${day.format(Date(store.lastSync))}, ${time.format(Date(store.lastSync))}. " +
-                    "Nothing is lost: it goes up when the hub answers."
-            store.lastError.isNotEmpty() -> "Couldn't send: ${store.lastError}"
-            store.lastSync > 0 -> "Last sent ${time.format(Date(store.lastSync))}. It sends by itself about every 15 minutes, " +
-                "and whenever you open this app."
-            else -> "Not sent yet."
+                "Failed: ${store.lastError}\nLast sent ${day.format(Date(store.lastSync))}, ${time.format(Date(store.lastSync))}"
+            store.lastError.isNotEmpty() -> "Failed: ${store.lastError}"
+            store.lastSync > 0 -> "Sent ${time.format(Date(store.lastSync))}"
+            else -> "Not sent yet"
         }
         dashboardButton.visibility = if (store.hub.isNotEmpty()) View.VISIBLE else View.GONE
     }

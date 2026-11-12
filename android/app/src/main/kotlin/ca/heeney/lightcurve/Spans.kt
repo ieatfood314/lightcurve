@@ -46,6 +46,9 @@ fun buildSpans(events: List<Event>, now: Long): Built {
     var pausedAt = 0L  // 0 while the app is in front
     var last = 0L
     var checkpoint: Long? = null
+    var screenOn = true
+    // An app that came to the front behind a dark screen (an alarm, a blocker): nobody is looking yet.
+    var waiting: Event? = null
 
     fun close(at: Long) {
         val p = pkg ?: return
@@ -55,9 +58,20 @@ fun buildSpans(events: List<Event>, now: Long): Built {
         pausedAt = 0
     }
 
+    fun lightUp(at: Long) {
+        screenOn = true
+        waiting?.let {
+            close(at)
+            pkg = it.pkg
+            cls = it.cls
+            start = at
+        }
+        waiting = null
+    }
+
     for (e in events) {
         when (e.type) {
-            Ev.RESUMED -> {
+            Ev.RESUMED -> if (!screenOn) waiting = e else {
                 if (pkg == e.pkg && (pausedAt == 0L || e.time - pausedAt <= HANDOVER)) {
                     pausedAt = 0
                 } else {
@@ -67,14 +81,26 @@ fun buildSpans(events: List<Event>, now: Long): Built {
                 }
                 cls = e.cls
             }
-            Ev.PAUSED -> if (pkg == e.pkg && cls == e.cls && pausedAt == 0L) pausedAt = e.time
+            Ev.PAUSED -> if (!screenOn) {
+                if (waiting?.pkg == e.pkg && waiting?.cls == e.cls) waiting = null
+            } else if (pkg == e.pkg && cls == e.cls && pausedAt == 0L) pausedAt = e.time
             Ev.SCREEN_OFF, Ev.SHUTDOWN -> {
                 close(e.time)
                 checkpoint = e.time
+                screenOn = false
+                waiting = null
             }
+            Ev.SCREEN_ON -> lightUp(e.time)
             // The phone came up without having said it went down: whatever was open ended when the log went quiet.
-            Ev.STARTUP -> close(last)
-            Ev.KEYGUARD_HIDDEN -> pickups.add(e.time)
+            Ev.STARTUP -> {
+                close(last)
+                screenOn = true
+                waiting = null
+            }
+            Ev.KEYGUARD_HIDDEN -> {
+                pickups.add(e.time)
+                lightUp(e.time)
+            }
         }
         last = e.time
     }

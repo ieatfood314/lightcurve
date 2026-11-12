@@ -54,7 +54,7 @@ class SpansTest {
     }
 
     @Test fun whatIsOpenNowRunsToNowAndIsMarkedActive() {
-        val b = buildSpans(listOf(Event(s(0), Ev.SCREEN_OFF), on(10, "youtube")), s(300))
+        val b = buildSpans(listOf(Event(s(0), Ev.SCREEN_OFF), Event(s(9), Ev.SCREEN_ON), on(10, "youtube")), s(300))
         assertEquals(listOf(Span(s(10), s(300), "youtube")), b.spans)
         assertTrue(b.active)
         assertEquals(s(0), b.checkpoint)
@@ -85,6 +85,33 @@ class SpansTest {
         val later = buildSpans(events.filter { it.time >= whole.checkpoint!! }, s(600))
         assertEquals(whole.spans.filter { it.start >= s(50) }, later.spans)
         assertEquals(whole.pickups, later.pickups)
+    }
+
+    @Test fun anAppOpeningBehindADarkScreenWaitsForTheScreen() {
+        // a blocker takes the front at bedtime with the screen already off, and is still there in the morning
+        val b = buildSpans(listOf(
+            on(0, "video"), Event(s(60), Ev.SCREEN_OFF), on(200, "blocker"),
+            Event(s(30000), Ev.SCREEN_ON), Event(s(30002), Ev.KEYGUARD_HIDDEN), off(30010, "blocker"), on(30010, "launcher"),
+            Event(s(30020), Ev.SCREEN_OFF),
+        ), s(40000))
+        assertEquals(listOf(
+            Span(s(0), s(60), "video"), Span(s(30000), s(30010), "blocker"), Span(s(30010), s(30020), "launcher"),
+        ), b.spans)
+    }
+
+    @Test fun anAppThatCameAndWentInTheDarkIsNotRecorded() {
+        val b = buildSpans(listOf(
+            Event(s(0), Ev.SCREEN_OFF), on(100, "alarm"), off(130, "alarm"),
+            Event(s(500), Ev.SCREEN_ON), on(501, "launcher"), Event(s(520), Ev.SCREEN_OFF),
+        ), s(600))
+        assertEquals(listOf(Span(s(501), s(520), "launcher")), b.spans)
+    }
+
+    @Test fun anUnlockCountsAsTheScreenComingOn() {
+        val b = buildSpans(listOf(
+            Event(s(0), Ev.SCREEN_OFF), Event(s(100), Ev.KEYGUARD_HIDDEN), on(101, "reddit"), Event(s(160), Ev.SCREEN_OFF),
+        ), s(600))
+        assertEquals(listOf(Span(s(101), s(160), "reddit")), b.spans)
     }
 
     @Test fun nothingHappenedNothingRecorded() {

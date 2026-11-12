@@ -216,6 +216,51 @@ class Legacy(Base):
         self.assertEqual(rows["Zen"], 1200)
 
 
+    def test_a_phone_with_spans_does_not_hide_a_computer_with_only_totals(self):
+        a = at("2026-01-05", 9)
+        core.ingest(self.db, {"device": {"id": "desk-1"}, "legacy": [["2026-01-05", "kitty", 1800]]})
+        self.send("phone-1", [(a, a + 600, "org.signal.signal", "")], kind="phone", now=a + 4000)
+        day = core.day_report(self.db, "2026-01-05", now=at("2026-03-01", 12))
+        self.assertEqual(day["lit"], 600)
+        self.assertEqual(day["legacy"]["seconds"], 1800)
+        r = core.range_report(self.db, "2026-01-05", 2, now=at("2026-03-01", 12))
+        self.assertEqual(r["rows"][-1]["lit"], 2400)
+        self.assertEqual(r["legacy_apps"], [["kitty", 1800, "make"]])
+
+    def test_once_a_computer_has_spans_its_total_for_that_day_is_dropped(self):
+        a = at("2026-01-05", 9)
+        core.ingest(self.db, {"device": {"id": "desk-1"}, "legacy": [["2026-01-05", "kitty", 1800]]})
+        self.send("desk-1", [(a, a + 600, "kitty", "")], now=a + 4000)
+        day = core.day_report(self.db, "2026-01-05", now=at("2026-03-01", 12))
+        self.assertIsNone(day["legacy"])
+
+    def test_document_titles_waytime_kept_as_sites_go_back_to_the_browser(self):
+        core.ingest(self.db, {"device": {"id": "desk-1"}, "legacy": [
+            ["2026-01-05", "zen", 3600], ["2026-01-05", "site:Essay draft.docx", 600],
+            ["2026-01-05", "site:Trifold Brochure", 600], ["2026-01-05", "site:Printables.com", 900]]})
+        r = core.day_report(self.db, "2026-01-05", now=at("2026-03-01", 12))
+        rows = {label: seconds for label, seconds, _ in r["legacy"]["apps"]}
+        self.assertEqual(rows, {"Zen": 2700, "Printables.com": 900})
+
+
+class Rules(Base):
+    def test_a_browser_is_a_browser_whatever_the_phone_calls_it(self):
+        a = at("2026-03-10", 14)
+        self.send("phone-1", [(a, a + 600, "org.mozilla.firefox", "")], kind="phone", now=a + 4000,
+                  names={"org.mozilla.firefox": {"label": "Firefox", "hint": "talk"}})
+        r = core.day_report(self.db, "2026-03-10", now=a + 4000)
+        self.assertEqual(r["entities"][0]["cat"], "browse")
+
+    def test_a_device_can_replace_what_it_sent(self):
+        a = at("2026-03-10", 14)
+        self.send("phone-1", [(a - 7200, a - 7000, "x.before", ""), (a, a + 30000, "x.blocker", "")], kind="phone", now=a + 40000)
+        _, touched = self.send("phone-1", [(a + 29000, a + 29100, "x.blocker", "")], kind="phone", now=a + 40000,
+                               replace_from=ms(a - 60))
+        rows = self.db.execute("SELECT app, (end - start) / 1000 FROM spans ORDER BY start").fetchall()
+        self.assertEqual(rows, [("x.before", 200), ("x.blocker", 100)])
+        self.assertIn("2026-03-10", touched)
+
+
 class Burns(Base):
     def test_what_was_on_screen_during_a_burn(self):
         a = at("2026-03-10", 14)

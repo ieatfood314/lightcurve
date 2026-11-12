@@ -19,6 +19,8 @@ import kotlin.concurrent.thread
 object Sync {
     private const val JOB = 4625
     private const val CHUNK = 4000
+    /** 2: an app that opens behind a dark screen no longer counts until the screen comes on. */
+    private const val RULES = 2
     private val lock = Any()
 
     class Outcome(val ok: Boolean, val message: String)
@@ -50,7 +52,9 @@ object Sync {
     private fun push(ctx: Context, store: Store, now: Long): Outcome {
         if (store.hub.isEmpty()) return Outcome(false, "No hub address yet.")
         if (!Collector.hasAccess(ctx)) return Outcome(false, "Usage access hasn't been allowed.")
-        val from = if (store.checkpoint > 0) store.checkpoint else now - Collector.FIRST_REACH
+        // When the counting rules change, everything the phone still remembers is rebuilt and replaces the hub's copy.
+        val redo = store.rules < RULES
+        val from = if (store.checkpoint > 0 && !redo) store.checkpoint else now - Collector.FIRST_REACH
         val built = buildSpans(Collector.read(ctx, from, now), now)
 
         val names = JSONObject()
@@ -73,9 +77,11 @@ object Sync {
                 .put("complete", final)
                 .put("active", built.active)
             if (final) body.put("pickups", JSONArray(built.pickups)).put("names", names)
+            if (redo && i == 0 && built.spans.isNotEmpty()) body.put("replace_from", from)
             post(store.hub + "/api/ingest", body.toString())
         }
         built.checkpoint?.let { store.checkpoint = it }
+        store.rules = RULES
         store.lastSync = now
         store.lastCount = built.spans.size
         return Outcome(true, "")

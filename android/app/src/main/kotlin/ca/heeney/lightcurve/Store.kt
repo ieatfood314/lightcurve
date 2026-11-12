@@ -39,6 +39,11 @@ class Store(ctx: Context) {
         get() = prefs.getLong("checkpoint", 0)
         set(v) = prefs.edit().putLong("checkpoint", v).apply()
 
+    /** Which version of the counting rules the hub's copy of this phone was built with. */
+    var rules: Int
+        get() = prefs.getInt("rules", 1)
+        set(v) = prefs.edit().putInt("rules", v).apply()
+
     var lastSync: Long
         get() = prefs.getLong("last_sync", 0)
         set(v) = prefs.edit().putLong("last_sync", v).apply()
