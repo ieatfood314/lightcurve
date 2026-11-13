@@ -105,7 +105,7 @@ The comparison of days with and without a burn only appears once there are three
 
 ## Built on
 
-Python's standard library for the hub, the tracker's storage and the command; `python-dbus` and GLib for talking to KWin. The idle detection speaks the Wayland `ext-idle-notify-v1` protocol directly. The Android app is plain Kotlin with no libraries. The dashboard is one HTML file, one stylesheet and one script, set in [Archivo](https://fonts.google.com/specimen/Archivo) (SIL Open Font License, shipped in `web/fonts`).
+Python's standard library for the hub, the tracker's storage and the command; `python-dbus` and GLib for talking to KWin. The idle detection speaks the Wayland `ext-idle-notify-v1` protocol directly. The Android app is plain Kotlin with no libraries. The dashboard is one HTML file, one stylesheet and one script, set in [Archivo](https://fonts.google.com/specimen/Archivo), with the name in [Gloock](https://fonts.google.com/specimen/Gloock) (both SIL Open Font License, shipped in `web/fonts`).
 
 ## Disclaimer
 
