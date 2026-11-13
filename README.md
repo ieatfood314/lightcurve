@@ -47,7 +47,7 @@ Leave `--hub` off and it keeps the record on that machine alone; the `lightcurve
 
 ### An Android phone
 
-Install the APK from the [latest release](https://github.com/ieatfood314/lightcurve/releases/latest) (or add this repository to [Obtainium](https://obtainium.imranr.dev)). Give it the hub's address and allow usage access. The first sync brings in about a week of history that Android already had.
+Install the APK from the [latest release](https://github.com/ieatfood314/lightcurve/releases/latest) (or add this repository to [Obtainium](https://obtainium.imranr.dev)). Give it the hub's address and allow usage access. The first sync brings in about a week of history that Android already had. If [doppler](https://github.com/ieatfood314/doppler) is installed too, the app hands it today's total after each sync, for its 2×2 widget.
 
 <img src="docs/phone.png" width="320" alt="The dashboard on a phone">
 

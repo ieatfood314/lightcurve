@@ -43,5 +43,12 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <!-- doppler's 2x2 widget asks for today's screen time; Today.kt answers. -->
+        <receiver android:name=".RefreshReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="ca.heeney.lightcurve.REFRESH" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

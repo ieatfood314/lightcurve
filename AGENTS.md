@@ -12,7 +12,7 @@ The README says what it does and how it counts; keep it true when behaviour chan
 - `lightcurve/wayland_idle.py`: a dependency-free client for `ext-idle-notify-v1`.
 - `lightcurve/cli.py`: the `lightcurve` command. `lightcurve/demo.py`: made-up data for `serve --demo`.
 - `web/`: the dashboard. Plain HTML, CSS and JS, no build step. Fonts are in `web/fonts`.
-- `android/`: the phone app, Kotlin with no libraries. `Spans.kt` is the pure logic and has the unit tests; `MainActivity` is a WebView onto the hub plus one native page.
+- `android/`: the phone app, Kotlin with no libraries. `Spans.kt` is the pure logic and has the unit tests; `MainActivity` is a WebView onto the hub plus one native page. `Today.kt` sends today's total to doppler (`ca.heeney.lightcurve.TODAY`, extras `lit` and `date`) after each good sync, and answers its `ca.heeney.lightcurve.REFRESH`; keep both names as doppler's `ScreenTime.kt` has them.
 - `install.sh`, `update.sh`, `uninstall.sh`, `systemd/`: per-user install, no sudo anywhere.
 
 ## Rules that are easy to break
