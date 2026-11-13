@@ -19,7 +19,8 @@ object Ev {
     const val STARTUP = 27
 }
 
-data class Span(val start: Long, val end: Long, val pkg: String)
+/** [site] is the domain a browser showed, or "" for anything else. */
+data class Span(val start: Long, val end: Long, val pkg: String, val site: String = "")
 
 class Built(
     val spans: List<Span>,

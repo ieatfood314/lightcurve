@@ -57,9 +57,12 @@ object Sync {
         val redo = store.rules < RULES
         val from = if (store.checkpoint > 0 && !redo) store.checkpoint else now - Collector.FIRST_REACH
         val built = buildSpans(Collector.read(ctx, from, now), now)
+        // A day or two past the farthest a sync reaches back, in case the rules change and it all goes again.
+        SiteLog.prune(ctx, now - Collector.FIRST_REACH - 2 * 24 * 3600 * 1000L)
+        val spans = splitBySite(built.spans, SiteLog.since(ctx, from))
 
         val names = JSONObject()
-        for (pkg in built.spans.map { it.pkg }.toSet()) {
+        for (pkg in spans.map { it.pkg }.toSet()) {
             val (label, hint) = Collector.describe(ctx, pkg)
             if (label.isNotEmpty() || hint.isNotEmpty()) names.put(pkg, JSONObject().put("label", label).put("hint", hint))
         }
@@ -68,23 +71,23 @@ object Sync {
             .put("id", store.deviceId).put("name", store.name).put("kind", if (tablet) "tablet" else "phone")
             .put("platform", "Android " + Build.VERSION.RELEASE).put("version", BuildConfig.VERSION_NAME)
 
-        val chunks = built.spans.chunked(CHUNK).ifEmpty { listOf(emptyList()) }
+        val chunks = spans.chunked(CHUNK).ifEmpty { listOf(emptyList()) }
         for ((i, chunk) in chunks.withIndex()) {
             val final = i == chunks.lastIndex
             val body = JSONObject().put("device", device)
                 .put("spans", JSONArray().also { arr ->
-                    for (s in chunk) arr.put(JSONArray().put(s.start).put(s.end).put(s.pkg).put(""))
+                    for (s in chunk) arr.put(JSONArray().put(s.start).put(s.end).put(s.pkg).put(s.site))
                 })
                 .put("complete", final)
                 .put("active", built.active)
             if (final) body.put("pickups", JSONArray(built.pickups)).put("names", names)
-            if (redo && i == 0 && built.spans.isNotEmpty()) body.put("replace_from", from)
+            if (redo && i == 0 && spans.isNotEmpty()) body.put("replace_from", from)
             post(store.hub + "/api/ingest", body.toString())
         }
         built.checkpoint?.let { store.checkpoint = it }
         store.rules = RULES
         store.lastSync = now
-        store.lastCount = built.spans.size
+        store.lastCount = spans.size
         return Outcome(true, "")
     }
 

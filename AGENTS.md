@@ -12,7 +12,7 @@ The README says what it does and how it counts; keep it true when behaviour chan
 - `lightcurve/wayland_idle.py`: a dependency-free client for `ext-idle-notify-v1`.
 - `lightcurve/cli.py`: the `lightcurve` command. `lightcurve/demo.py`: made-up data for `serve --demo`.
 - `web/`: the dashboard. Plain HTML, CSS and JS, no build step. Fonts are in `web/fonts`.
-- `android/`: the phone app, Kotlin with no libraries. `Spans.kt` is the pure logic and has the unit tests; `MainActivity` is a WebView onto the hub plus one native page. `Today.kt` sends today's total to doppler (`ca.heeney.lightcurve.TODAY`, extras `lit` and `date`) after each good sync, and answers its `ca.heeney.lightcurve.REFRESH`; keep both names as doppler's `ScreenTime.kt` has them.
+- `android/`: the phone app, Kotlin with no libraries. `Spans.kt` and `Sites.kt` are the pure logic and have the unit tests; `SiteWatcher` is an accessibility service that notes the domain in a browser's address bar (its matching is ignition's `BlockerService`), and sync cuts browser spans by it; `MainActivity` is a WebView onto the hub plus one native page. `Today.kt` sends today's total to doppler (`ca.heeney.lightcurve.TODAY`, extras `lit` and `date`) after each good sync, and answers its `ca.heeney.lightcurve.REFRESH`; keep both names as doppler's `ScreenTime.kt` has them.
 - `install.sh`, `update.sh`, `uninstall.sh`, `systemd/`: per-user install, no sudo anywhere.
 
 ## Rules that are easy to break
@@ -20,7 +20,7 @@ The README says what it does and how it counts; keep it true when behaviour chan
 - Spans are keyed by `(device, start)` and re-sent as they grow. Anything a device sends must be safe to send twice.
 - Things are known by their name (`n:<label lower>`), so an app and a site with the same name are one thing. Category choices are stored under that key.
 - Analysis words are promises. "Usual" is a median of the user's own days and isn't claimed under five days of history; the burn comparison needs three days on each side; incomplete data is said out loud (`coverage_notes`). Don't add a number the data can't back.
-- No window titles or addresses are stored. `site_from_caption` returns "" when a title doesn't name a site.
+- No window titles or addresses are stored. `site_from_caption` returns "" when a title doesn't name a site. Phones send a domain as the site; `site_name` turns it into the name a title would give (`SITE_NAMES`), at read time, so a better table fixes old records too.
 - The category colours in `web/style.css` were checked with the dataviz skill's `validate_palette.js --pairs all` on both surfaces. Re-run it if you change one.
 - Screenshots in `docs/` are demo data only. Never commit a real record.
 

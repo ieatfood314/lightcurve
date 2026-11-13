@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">lightcurve</string>
+    <string name="site_watcher">lightcurve sites</string>
+    <string name="site_watcher_about">Reads the address bar in your browsers, so browser time can be split by site. Only the domain is kept, such as youtube.com. Nothing else on screen is read.</string>
 </resources>

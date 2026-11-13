@@ -221,6 +221,70 @@ def site_from_caption(caption):
     return parts[-1] if parts and plausible_site(parts[-1]) else ""
 
 
+# Phones read the site from the address bar, so they send a domain ("m.youtube.com") where computers send
+# the name a window title gives ("YouTube"). This turns the one into the other, so both are one thing. The
+# most specific domain listed wins: docs.google.com is Google Docs, the rest of google.com is Google.
+SITE_NAMES = {
+    "youtube.com": "YouTube", "youtu.be": "YouTube", "music.youtube.com": "YouTube Music",
+    "reddit.com": "Reddit", "redd.it": "Reddit", "twitch.tv": "Twitch", "netflix.com": "Netflix",
+    "primevideo.com": "Prime Video", "disneyplus.com": "Disney+", "crunchyroll.com": "Crunchyroll",
+    "hulu.com": "Hulu", "max.com": "Max", "x.com": "X", "twitter.com": "X", "instagram.com": "Instagram",
+    "tiktok.com": "TikTok", "facebook.com": "Facebook", "threads.net": "Threads", "threads.com": "Threads",
+    "bsky.app": "Bluesky", "tumblr.com": "Tumblr", "pinterest.com": "Pinterest", "pinterest.ca": "Pinterest",
+    "9gag.com": "9GAG", "imgur.com": "Imgur", "news.ycombinator.com": "Hacker News", "lobste.rs": "Lobsters",
+    "wikipedia.org": "Wikipedia", "artificialanalysis.ai": "Artificial Analysis", "printables.com": "Printables",
+    "makerworld.com": "MakerWorld", "thingiverse.com": "Thingiverse", "open.spotify.com": "Spotify",
+    "github.com": "GitHub", "gitlab.com": "GitLab", "codeberg.org": "Codeberg", "stackoverflow.com": "Stack Overflow",
+    "overleaf.com": "Overleaf", "figma.com": "Figma", "docs.google.com": "Google Docs",
+    "sheets.google.com": "Google Sheets", "slides.google.com": "Google Slides", "colab.research.google.com": "Colab",
+    "developer.mozilla.org": "MDN Web Docs", "wiki.archlinux.org": "Arch Wiki", "notion.so": "Notion",
+    "replit.com": "Replit", "onshape.com": "Onshape", "claude.ai": "Claude", "chatgpt.com": "ChatGPT",
+    "discord.com": "Discord", "web.whatsapp.com": "WhatsApp", "web.telegram.org": "Telegram",
+    "mail.google.com": "Gmail", "mail.proton.me": "Proton Mail", "outlook.live.com": "Outlook",
+    "outlook.office.com": "Outlook", "meet.google.com": "Google Meet", "messenger.com": "Messenger",
+    "app.slack.com": "Slack", "monkeytype.com": "Monkeytype", "chess.com": "Chess.com", "lichess.org": "Lichess",
+    "google.com": "Google", "google.ca": "Google", "duckduckgo.com": "DuckDuckGo", "bing.com": "Bing",
+    "kagi.com": "Kagi", "maps.google.com": "Google Maps", "amazon.com": "Amazon", "amazon.ca": "Amazon",
+    "ebay.com": "eBay", "ebay.ca": "eBay", "kijiji.ca": "Kijiji", "aliexpress.com": "AliExpress",
+    "cbc.ca": "CBC", "bbc.com": "BBC", "bbc.co.uk": "BBC", "theverge.com": "The Verge",
+    "arstechnica.com": "Ars Technica", "nytimes.com": "The New York Times", "theguardian.com": "The Guardian",
+}
+# Domains shared by many sites: the site is the label in front.
+_SHARED_DOMAINS = {"github.io", "gitlab.io", "pages.dev", "vercel.app", "netlify.app", "herokuapp.com",
+                   "blogspot.com", "substack.com", "wordpress.com", "fly.dev", "neocities.org"}
+_HOST_RE = re.compile(r"^(?:[a-z0-9-]+\.)+[a-z]{2,63}$")
+
+
+def site_from_host(host):
+    """The name a domain goes by: "m.youtube.com" -> "YouTube", "foo.github.io" -> "foo.github.io".
+
+    A domain nobody has named stays a domain, cut down to the part you'd type: "news.example.co.uk" ->
+    "example.co.uk". "" if it isn't a domain at all.
+    """
+    h = host.strip().lower().rstrip(".")
+    if not _HOST_RE.match(h):
+        return ""
+    labels = h.split(".")
+    while len(labels) > 2 and labels[0] in ("www", "m", "mobile", "amp", "touch"):
+        labels = labels[1:]
+    for i in range(len(labels) - 1):
+        name = SITE_NAMES.get(".".join(labels[i:]))
+        if name:
+            return name
+    if labels[-2:] == ["ts", "net"] and len(labels) > 3:
+        return labels[0]  # a tailnet: "lightcurve.tailnet-name.ts.net" is the service in front
+    for i in range(1, len(labels) - 1):
+        if ".".join(labels[i:]) in _SHARED_DOMAINS:
+            return ".".join(labels[i - 1:])
+    keep = 3 if len(labels) >= 3 and len(labels[-1]) == 2 and labels[-2] in ("co", "com", "org", "net", "ac", "gov", "edu") else 2
+    return ".".join(labels[-keep:])
+
+
+def site_name(site):
+    """A site as it is shown and known: a domain becomes its name, a name from a title stays as it is."""
+    return (site_from_host(site) or site) if "." in site and " " not in site else site
+
+
 def plausible_site(name):
     """Could this be the name of a site, as opposed to the title of a page?"""
     return bool(name) and len(name) <= 30 and len(name.split()) <= 4 and "@" not in name and name != "(untitled)"
@@ -248,7 +312,8 @@ _RULES = {
         "hacker news lobsters spotify com.spotify.music foliate com.github.johnfactotum.foliate "
         "com.google.android.youtube com.reddit.frontpage com.instagram.android com.zhiliaoapp.musically "
         "com.twitter.android com.facebook.katana com.netflix.mediaclient tv.twitch.android.app "
-        "com.google.android.apps.youtube.music wikipedia artificial analysis printables makerworld thingiverse"
+        "com.google.android.apps.youtube.music wikipedia artificial analysis printables makerworld thingiverse "
+        "cbc bbc the verge ars technica the new york times the guardian"
     ),
     "talk": (
         "discord com.discordapp.discord vesktop dev.vencord.vesktop signal org.signal.signal org.thoughtcrime.securesms "
@@ -270,17 +335,19 @@ _RULES = {
         "kcm_workspace com.android.settings com.android.systemui com.android.vending com.google.android.apps.nexuslauncher "
         "com.nothing.launcher com.teslacoilsw.launcher app.lawnchair com.android.launcher3 "
         "com.google.android.deskclock com.android.camera com.google.android.calculator org.kde.kcalc "
-        "com.google.android.apps.photos com.google.android.permissioncontroller com.google.android.packageinstaller"
+        "com.google.android.apps.photos com.google.android.permissioncontroller com.google.android.packageinstaller "
+        "google google search duckduckgo bing kagi google maps com.google.android.apps.maps"
     ),
 }
 # Multi-word names are matched whole, so they're listed again here.
 _PHRASES = {
     "make": ("stack overflow", "google docs", "google sheets", "google slides", "google colab", "mdn web docs",
              "arch wiki", "t3 code"),
-    "watch": ("youtube music", "prime video", "hacker news", "artificial analysis"),
+    "watch": ("youtube music", "prime video", "hacker news", "artificial analysis", "the verge", "ars technica",
+              "the new york times", "the guardian"),
     "talk": ("proton mail", "microsoft teams", "google meet"),
     "play": (),
-    "other": (),
+    "other": ("google search", "google maps"),
 }
 BUILTIN = {}
 for _cat, _words in _RULES.items():
@@ -316,7 +383,7 @@ class Namer:
 
     def label(self, app, site):
         if site:
-            return site
+            return site_name(site)
         label = self.names.get(app, ("", ""))[0]
         return label or pretty_app(app)
 
@@ -334,9 +401,12 @@ class Namer:
         if not site and label in BUILTIN and app.lower() not in BUILTIN:
             return BUILTIN[label]
         if site:
-            s = site.lower()
+            s = label
             if s in BUILTIN:
                 return BUILTIN[s]
+            # a domain nobody listed, named after something that is: "monkeytype.com"
+            if "." in s and s.split(".")[0] in KNOWN_SITES:
+                return BUILTIN[s.split(".")[0]]
             # "r/linux" style and "Something - YouTube" leftovers
             if s.startswith("r/"):
                 return "watch"

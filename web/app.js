@@ -180,9 +180,12 @@ const hideTip = () => { tip.hidden = true; };
 const tipRow = (cat, label, value) => el("div", { class: "t-row" }, el("span", {}, cat ? el("i", { class: `b-${cat}` }) : null, label), el("b", { text: value }));
 addEventListener("scroll", hideTip, { passive: true });
 
+// Most time first. The bars keep their good-to-bad order; the labels are read as a ranking.
+const byTime = (cats) => CATS.filter((c) => cats[c] > 0).sort((a, b) => cats[b] - cats[a]);
+
 function legend(host, cats, burn) {
   clear(host);
-  for (const c of CATS) if (cats[c] > 0) host.append(el("span", { title: CAT_ABOUT[c] }, key(c), CAT_NAME[c], el("b", { text: dur(cats[c]) })));
+  for (const c of byTime(cats)) host.append(el("span", { title: CAT_ABOUT[c] }, key(c), CAT_NAME[c], el("b", { text: dur(cats[c]) })));
   if (burn) host.append(el("span", {}, el("i", { class: "burn-key" }), "Burn"));
 }
 
@@ -561,7 +564,7 @@ function renderBurns() {
     }
     if (triple.children.length) {
       const lg = el("div", { class: "legend", style: "margin-top:2px" });
-      for (const c of CATS) if (ig.overall[c] > 0) lg.append(el("span", {}, key(c), CAT_NAME[c]));
+      for (const c of byTime(ig.overall)) lg.append(el("span", {}, key(c), CAT_NAME[c]));
       triple.append(lg);
       host.append(triple);
     }

@@ -47,7 +47,9 @@ Leave `--hub` off and it keeps the record on that machine alone; the `lightcurve
 
 ### An Android phone
 
-Install the APK from the [latest release](https://github.com/ieatfood314/lightcurve/releases/latest) (or add this repository to [Obtainium](https://obtainium.imranr.dev)). Give it the hub's address and allow usage access. The first sync brings in about a week of history that Android already had. If [doppler](https://github.com/ieatfood314/doppler) is installed too, the app hands it today's total after each sync, for its 2×2 widget.
+Install the APK from the [latest release](https://github.com/ieatfood314/lightcurve/releases/latest) (or add this repository to [Obtainium](https://obtainium.imranr.dev)). Give it the hub's address and allow usage access. The first sync brings in about a week of history that Android already had.
+
+To split browser time by site, turn on *Sites* in the app. That opens Accessibility in Settings, where you turn on *lightcurve sites*; Android may first ask you to allow restricted settings for the app (App info, ⋮). It reads the domain in a browser's address bar and nothing else on screen. If [doppler](https://github.com/ieatfood314/doppler) is installed too, the app hands it today's total after each sync, for its 2×2 widget.
 
 <img src="docs/phone.png" width="320" alt="The dashboard on a phone">
 
@@ -73,14 +75,17 @@ Everything is stored as spans: one unbroken stretch of one thing in front of you
 - **A day runs from 04:00 to 04:00**, so a late night stays with the day it belongs to.
 - **Lit** is wall-clock time with at least one screen in use. Per-device times can add up to more.
 - **On a computer** a span runs while a window has focus, the screen isn't locked, and you are there. Three minutes without touching anything and the tracker starts to doubt; come back within five and you were reading, stay away longer and the span ends at your last touch. A playing video keeps it going without input, for two hours at most. The bare desktop is never counted.
-- **On a phone** a span runs while an app is in front with the screen on.
+- **On a phone** a span runs while an app is in front with the screen on. With *Sites* on, a browser's span is cut wherever the site in its address bar changed; a site held for under three seconds (a redirect, a sign-in hop) gives its time to the next.
 - **A visit** is one thing held without leaving it for more than 45 seconds. **A sitting** is screen time with no break of five minutes.
+- **Sites** are known by name, so `m.youtube.com` from a phone and "YouTube" from a window title are one thing. A domain the built-in list doesn't name is shown as the part you'd type (`example.com`). Browse is what's left: browser time with no site, and sites nobody has categorised yet.
 - **Categories** (make, watch, talk, play, browse, other) come from a built-in list and, on Android, the app's own declared category. They are guesses. Click anything to say what it really is; your answer applies everywhere.
 
 ## What it keeps, and what it doesn't
 
 - The window's class or the app's package id, with start and end times.
-- For browsers, the site, read from the end of the window title ("… - YouTube — Firefox"). If the title doesn't end in something short enough to be a site's name, nothing is kept and the time is just the browser's. Full titles and addresses are never stored.
+- For browsers on a computer, the site, read from the end of the window title ("… - YouTube — Firefox"). If the title doesn't end in something short enough to be a site's name, nothing is kept and the time is just the browser's.
+- For browsers on a phone with *Sites* on, the domain from the address bar (`youtube.com`), without the page's path. The phone keeps a list of these for about twelve days so a sync can rebuild its spans.
+- Full titles and addresses are never stored.
 - Phone unlock times.
 
 All of it lives in SQLite files you own: `~/.local/share/lightcurve/` on the hub and on each computer. There are no accounts and nothing leaves your machines.

@@ -79,6 +79,43 @@ class Titles(unittest.TestCase):
                          "Outdoor Gear Lab")
 
 
+class Domains(Base):
+    """Phones read the address bar and send a domain; it has to land on the same thing as a window title's name."""
+
+    def test_a_domain_goes_by_its_sites_name(self):
+        self.assertEqual(core.site_from_host("m.youtube.com"), "YouTube")
+        self.assertEqual(core.site_from_host("old.reddit.com"), "Reddit")
+        self.assertEqual(core.site_from_host("en.m.wikipedia.org"), "Wikipedia")
+        self.assertEqual(core.site_from_host("news.ycombinator.com"), "Hacker News")
+
+    def test_the_most_specific_domain_wins(self):
+        self.assertEqual(core.site_from_host("docs.google.com"), "Google Docs")
+        self.assertEqual(core.site_from_host("www.google.com"), "Google")
+
+    def test_an_unknown_domain_is_cut_to_what_youd_type(self):
+        self.assertEqual(core.site_from_host("blog.example.com"), "example.com")
+        self.assertEqual(core.site_from_host("news.example.co.uk"), "example.co.uk")
+        self.assertEqual(core.site_from_host("someone.github.io"), "someone.github.io")
+        self.assertEqual(core.site_from_host("lightcurve.tailnet-name.ts.net"), "lightcurve")
+        self.assertEqual(core.site_from_host("not a domain"), "")
+
+    def test_a_name_from_a_title_is_left_alone(self):
+        self.assertEqual(core.site_name("Outdoor Gear Lab"), "Outdoor Gear Lab")
+        self.assertEqual(core.site_name("r/linux"), "r/linux")
+
+    def test_the_phones_domain_and_the_computers_title_are_one_thing(self):
+        a = at("2026-03-10", 9)
+        self.send("desk-1", [(a, a + 600, "zen", "YouTube")], now=a + 4000)
+        self.send("phone-1", [(a + 1200, a + 1800, "org.mozilla.firefox", "m.youtube.com"),
+                              (a + 1800, a + 2400, "org.mozilla.firefox", "monkeytype.com"),
+                              (a + 2400, a + 3000, "org.mozilla.firefox", "")], kind="phone", now=a + 4000)
+        r = core.day_report(self.db, "2026-03-10", now=a + 4000)
+        things = {e["label"]: (e["seconds"], e["cat"]) for e in r["entities"]}
+        self.assertEqual(things["YouTube"], (1200, "watch"))
+        self.assertEqual(things["Monkeytype"], (600, "play"))
+        self.assertEqual(things["Firefox"][1], "browse")
+
+
 class Ingest(Base):
     def test_sending_twice_changes_nothing(self):
         a = at("2026-03-10", 9)
@@ -240,7 +277,7 @@ class Legacy(Base):
             ["2026-01-05", "site:Trifold Brochure", 600], ["2026-01-05", "site:Printables.com", 900]]})
         r = core.day_report(self.db, "2026-01-05", now=at("2026-03-01", 12))
         rows = {label: seconds for label, seconds, _ in r["legacy"]["apps"]}
-        self.assertEqual(rows, {"Zen": 2700, "Printables.com": 900})
+        self.assertEqual(rows, {"Zen": 2700, "Printables": 900})
 
 
 class OneDevice(Base):

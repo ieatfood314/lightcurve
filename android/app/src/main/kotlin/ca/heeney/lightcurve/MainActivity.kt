@@ -35,8 +35,8 @@ import java.util.Date
 import kotlin.concurrent.thread
 
 /**
- * Two faces: the hub's dashboard in a WebView, and a native page for the three things only the phone
- * can do (say where the hub is, allow usage access, send now).
+ * Two faces: the hub's dashboard in a WebView, and a native page for the things only the phone can do
+ * (say where the hub is, allow usage access, read sites in browsers, send now).
  */
 class MainActivity : Activity() {
     private lateinit var store: Store
@@ -48,6 +48,8 @@ class MainActivity : Activity() {
     private lateinit var accessStatus: TextView
     private lateinit var accessButton: TextView
     private lateinit var syncStatus: TextView
+    private lateinit var sitesStatus: TextView
+    private lateinit var sitesButton: TextView
     private lateinit var nameField: EditText
     private lateinit var dashboardButton: TextView
     private var webReady = false
@@ -329,6 +331,15 @@ class MainActivity : Activity() {
         }
         col.add(accessButton, top = 14f)
 
+        col.section("Sites")
+        sitesStatus = text("", 15f, R.color.ink)
+        col.add(sitesStatus, top = 6f)
+        col.add(text("Splits browser time by site.", 15f, R.color.ink2), top = 4f)
+        sitesButton = button("Turn on", primary = false) {
+            runCatching { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+        }
+        col.add(sitesButton, top = 14f)
+
         col.section("Sync")
         syncStatus = text("", 15f, R.color.ink2)
         col.add(syncStatus, top = 6f)
@@ -372,6 +383,9 @@ class MainActivity : Activity() {
         accessStatus.text = if (access) "Allowed" else "Not allowed"
         accessStatus.setTextColor(color(if (access) R.color.ink else R.color.warn))
         accessButton.visibility = if (access) View.GONE else View.VISIBLE
+        val sites = SiteWatcher.enabled(this)
+        sitesStatus.text = if (sites) "On" else "Off"
+        sitesButton.visibility = if (sites) View.GONE else View.VISIBLE
         val time = DateFormat.getTimeInstance(DateFormat.SHORT)
         val day = DateFormat.getDateInstance(DateFormat.MEDIUM)
         syncStatus.text = when {
