@@ -1,6 +1,7 @@
 /* lightcurve. Dark is true black; light is the pale plate. Same layout in both. */
 
 @font-face { font-family: "Archivo"; src: url("fonts/archivo.woff2") format("woff2"); font-weight: 100 900; font-stretch: 62% 125%; font-display: swap; }
+@font-face { font-family: "Gloock"; src: url("fonts/gloock.woff2") format("woff2"); font-weight: 400; font-display: swap; }
 
 :root {
   --field: #000000;
@@ -71,7 +72,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
   background: var(--field);
   border-bottom: 1px solid var(--line-soft);
 }
-.mark { display: inline-flex; align-items: center; gap: 9px; color: var(--ink); text-decoration: none; font-weight: 640; font-stretch: 112%; letter-spacing: -.01em; font-size: 16px; }
+.mark { display: inline-flex; align-items: center; gap: 9px; color: var(--ink); text-decoration: none; font-family: "Gloock", Georgia, serif; font-weight: 400; font-size: 21px; line-height: 1; }
 .mark svg { fill: var(--ink); }
 .tabs { display: flex; gap: 2px; }
 .tabs button { height: 36px; padding: 0 14px; border-radius: 8px; color: var(--ink-2); font-weight: 520; }
