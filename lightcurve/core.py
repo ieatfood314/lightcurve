@@ -75,6 +75,14 @@ CREATE TABLE IF NOT EXISTS kv (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS limits (
+    id TEXT PRIMARY KEY,
+    body TEXT NOT NULL,
+    pending TEXT,
+    pending_at INTEGER,
+    created INTEGER NOT NULL,
+    updated INTEGER NOT NULL
+);
 """
 
 

@@ -58,6 +58,29 @@
                 android:resource="@xml/site_watcher" />
         </service>
 
+        <!-- Keeps the limits: is told which app is in front. Turned on by hand in Settings, Accessibility. -->
+        <service
+            android:name=".LimitKeeper"
+            android:exported="false"
+            android:label="@string/limit_keeper"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/limit_keeper" />
+        </service>
+
+        <!-- What stands in front of an app over its limit. Its own task, kept out of Recents. -->
+        <activity
+            android:name=".BlockActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="ca.heeney.lightcurve.block"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" />
+
         <!-- doppler's 2x2 widget asks for today's screen time; Today.kt answers. -->
         <receiver android:name=".RefreshReceiver" android:exported="true">
             <intent-filter>

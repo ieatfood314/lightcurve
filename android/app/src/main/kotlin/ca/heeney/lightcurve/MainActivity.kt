@@ -50,6 +50,8 @@ class MainActivity : Activity() {
     private lateinit var syncStatus: TextView
     private lateinit var sitesStatus: TextView
     private lateinit var sitesButton: TextView
+    private lateinit var limitsStatus: TextView
+    private lateinit var limitsButton: TextView
     private lateinit var nameField: EditText
     private lateinit var dashboardButton: TextView
     private var webReady = false
@@ -222,6 +224,12 @@ class MainActivity : Activity() {
             return
         }
         if (!url.startsWith("http://") && !url.startsWith("https://")) url = "http://$url"
+        // Another hub would bring other limits, or none: while limits are on, that waits behind the hold.
+        if (store.hub.isNotEmpty() && url != store.hub && LimitStore.guarded(this)) {
+            hubField.setText(store.hub)
+            startActivity(BlockActivity.forGuard(this))
+            return
+        }
         hubStatus.setTextColor(color(R.color.ink2))
         hubStatus.text = "Connecting…"
         thread {
@@ -340,6 +348,14 @@ class MainActivity : Activity() {
         }
         col.add(sitesButton, top = 14f)
 
+        col.section("Limits")
+        limitsStatus = text("", 15f, R.color.ink)
+        col.add(limitsStatus, top = 6f)
+        limitsButton = button("Turn on", primary = false) {
+            runCatching { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+        }
+        col.add(limitsButton, top = 14f)
+
         col.section("Sync")
         syncStatus = text("", 15f, R.color.ink2)
         col.add(syncStatus, top = 6f)
@@ -386,6 +402,17 @@ class MainActivity : Activity() {
         val sites = SiteWatcher.enabled(this)
         sitesStatus.text = if (sites) "On" else "Off"
         sitesButton.visibility = if (sites) View.GONE else View.VISIBLE
+        val keeper = LimitKeeper.enabled(this)
+        val limits = LimitStore.get(this).limits
+        limitsStatus.text = when {
+            !keeper && limits.isNotEmpty() -> "Off, so ${limits.size} ${if (limits.size == 1) "limit isn't" else "limits aren't"} kept"
+            !keeper -> "Off"
+            limits.isEmpty() -> "On, no limits yet"
+            limits.any { it.sites.isNotEmpty() } && !sites -> "On. Site limits need Sites on"
+            else -> "On, ${limits.size} ${if (limits.size == 1) "limit" else "limits"}"
+        }
+        limitsStatus.setTextColor(color(if (!keeper && limits.isNotEmpty()) R.color.warn else R.color.ink))
+        limitsButton.visibility = if (keeper) View.GONE else View.VISIBLE
         val time = DateFormat.getTimeInstance(DateFormat.SHORT)
         val day = DateFormat.getDateInstance(DateFormat.MEDIUM)
         syncStatus.text = when {

@@ -72,6 +72,8 @@ class SiteWatcher : AccessibilityService() {
             // While you type, the bar holds suggestions, not where you are.
             if (root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.isEditable == true) return
             val host = addressBar(root)?.let { Sites.hostIn(it) } ?: return
+            // The limits want to know what is showing now, even when it is the site noted last time.
+            if (showing.put(pkg, host) != host) LimitKeeper.recheck()
             if (last[pkg] == host) return
             last[pkg] = host
             SiteLog.add(this, Mark(System.currentTimeMillis(), pkg, host))
@@ -106,6 +108,9 @@ class SiteWatcher : AccessibilityService() {
     }
 
     companion object {
+        /** The site each browser showed last, for the limits. */
+        val showing = java.util.concurrent.ConcurrentHashMap<String, String>()
+
         /** Apps that open any web link. Apps that only open their own site's links (YouTube, Reddit) aren't. */
         fun browsers(ctx: Context): Set<String> {
             val probe = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com")).addCategory(Intent.CATEGORY_BROWSABLE)

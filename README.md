@@ -10,6 +10,7 @@ It replaces [waytime](https://github.com/ieatfood314/waytime), which counted tim
 - **Weeks:** one row a day, so you can see patterns.
 - **Apps:** every app and site, ranked by time.
 - **Burns:** what you did during [ignition](https://github.com/ieatfood314/ignition) burns, and right after them.
+- **Limits:** caps on apps and sites, kept by the phone, that take real effort to get past.
 
 Two screens on at once count once. Every number is compared with your own usual, not with a target.
 
@@ -18,6 +19,8 @@ Two screens on at once count once. Every number is compared with your own usual,
 ![Apps](docs/apps.png)
 
 ![Burns](docs/burns.png)
+
+![Limits](docs/limits.png)
 
 The screenshots use made-up data (`lightcurve serve --demo`).
 
@@ -53,6 +56,28 @@ To split browser time by site, turn on *Sites* in the app. That opens Accessibil
 
 <img src="docs/phone.png" width="320" alt="The dashboard on a phone">
 
+## Limits
+
+Set them up under *Limits* on the dashboard. A limit covers some apps and sites, or a whole kind (every game), and holds as many rules as you like:
+
+- **A day:** up to 1 h a day, on the days you pick. Days run 04:00 to 04:00, as everywhere else.
+- **In any:** up to 30 min in any 4 hours, counted over the hours just gone. It opens again once 5 minutes are free.
+- **Closed:** nothing from 22:00 to 07:00, on the days you pick. A window past midnight belongs to the day it starts.
+- **Between:** up to 20 min from 09:00 to 17:00, on the days you pick.
+- **At a time:** 20 min at a stretch, then a 30 min break. A pause shorter than the break doesn't end the stretch.
+
+Whichever rule is tightest wins. Time on every device counts, two screens at once counted once, so an hour of YouTube on the computer comes off the phone's allowance too.
+
+The phone keeps them. Turn on *lightcurve limits* in Accessibility (it shows under *Limits* in the app). When something is over a limit, a screen covers it. To get through, hold the ring for 5 seconds, then stay on that screen for 3 minutes; let go early or leave the screen and it starts over. Then it opens for 10 minutes. Each of those numbers is set per limit, along with how many unlocks a day you get, or none at all. Both waits run on the clock that counts from boot, so changing the phone's time doesn't hurry them, and a restart ends an unlock. Site limits need *Sites* on as well.
+
+Getting around a limit is meant to be slow, not impossible:
+
+- A change that loosens a limit (more time, fewer rules, an easier unlock, deleting it) waits 15 minutes before it takes effect, and the button has to be held. Tightening is immediate. A limit made in the last 10 minutes can still be changed at once.
+- While limits are on, the phone covers the pages that would switch them off: lightcurve's App info (uninstall, force stop, clear storage), its accessibility and usage access switches, the uninstall dialog, and Date & time (a moved clock would open anything that goes by the time of day). These open after the same hold and a wait as long as the loosening wait (or the longest unlock wait, if that is longer), for 5 minutes. To spot those pages it reads the words in Settings windows (in English); nothing is kept. Pointing the app at another hub needs the same unlock.
+- The phone keeps the last limits it got, so they hold with the hub out of reach.
+
+Safe mode, adb or editing the hub's database still get you out.
+
 ## The command
 
 ```
@@ -87,6 +112,7 @@ Everything is stored as spans: one unbroken stretch of one thing in front of you
 - For browsers on a phone with *Sites* on, the domain from the address bar (`youtube.com`), without the page's path. The phone keeps a list of these for about twelve days so a sync can rebuild its spans.
 - Full titles and addresses are never stored.
 - Phone unlock times.
+- Your limits, on the hub. The phone keeps a copy, plus when you last unlocked each one.
 
 All of it lives in SQLite files you own: `~/.local/share/lightcurve/` on the hub and on each computer. There are no accounts and nothing leaves your machines.
 

@@ -11,7 +11,7 @@ import os
 import random
 import time
 
-from . import core
+from . import core, limits
 
 DESK, LAPTOP, PHONE = "demo-desk", "demo-laptop", "demo-phone"
 DAYS = 70
@@ -183,5 +183,18 @@ def build(path):
         block = {"sites": ["youtube.com", "reddit.com"], "apps": [{"id": "com.instagram.android", "label": "Instagram"}],
                  "programs": [], "games": True}
         core.kv_set(db, "demo_ignition", json.dumps({"burns": [b for b in burns if b["start"] < now], "block": block}))
+    old = now - 3 * 86400
+    for body in (
+        {"targets": ["n:youtube"], "labels": {"n:youtube": "YouTube"},
+         "rules": [{"kind": "day", "minutes": 60}, {"kind": "stretch", "minutes": 25, "rest": 20}]},
+        {"name": "Feeds", "targets": ["n:reddit", "n:instagram", "n:hacker news"],
+         "labels": {"n:reddit": "Reddit", "n:instagram": "Instagram", "n:hacker news": "Hacker News"},
+         "rules": [{"kind": "every", "minutes": 20, "hours": 4}, {"kind": "block", "from": "22:30", "to": "07:00"}],
+         "unlock": {"hold": 10, "wait": 5, "grant": 5, "per_day": 2}},
+        {"name": "Games", "targets": ["c:play"],
+         "rules": [{"kind": "block", "from": "08:00", "to": "17:00", "days": [0, 1, 2, 3, 4]},
+                   {"kind": "day", "minutes": 90, "days": [5, 6]}], "unlock": None},
+    ):
+        limits.save(db, body, now=old)
     db.close()
     return path

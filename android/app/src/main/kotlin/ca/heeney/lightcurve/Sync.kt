@@ -46,7 +46,10 @@ object Sync {
             Outcome(false, it.message ?: it.javaClass.simpleName)
         }
         store.lastError = if (outcome.ok) "" else outcome.message
-        if (outcome.ok) Today.send(ctx, store.hub)
+        if (outcome.ok) {
+            Today.send(ctx, store.hub)
+            LimitStore.fetch(ctx)
+        }
         outcome
     }
 

@@ -11,7 +11,7 @@ const CAT_ABOUT = {
   play: "Games", browse: "Other web pages", other: "Settings, files, home screen",
 };
 const CAT_LETTER = { m: "make", w: "watch", t: "talk", p: "play", b: "browse", o: "other" };
-const VIEWS = ["day", "weeks", "apps", "burns", "devices"];
+const VIEWS = ["day", "weeks", "apps", "burns", "limits", "devices"];
 
 function el(tag, attrs, ...kids) {
   const n = document.createElement(tag);
@@ -73,7 +73,7 @@ const key = (cat) => el("i", { class: `key b-${cat}` });
 /* ---- state ---- */
 const state = {
   view: "day", date: null, device: null, days: Number(localStorage.getItem("lightcurve-days")) || 28,
-  day: null, range: null, devices: null, allDay: false, allApps: false, first: true,
+  day: null, range: null, devices: null, limits: null, allDay: false, allApps: false, first: true,
 };
 const devName = (id) => (state.day && state.day.devices.find((d) => d.id === id) || {}).name || id;
 const devKind = (id) => ((state.devices && state.devices.devices.find((d) => d.id === id)) || (state.day && state.day.devices.find((d) => d.id === id)) || {}).kind || "desktop";
@@ -131,7 +131,7 @@ async function load(what = "all") {
     if (what === "all" || what === "range") {
       jobs.push(api(`/api/range?days=${state.days}${state.date ? `&end=${state.date}` : ""}${dev}`).then((r) => { state.range = r; }));
     }
-    if (what === "all") jobs.push(api("/api/devices").then((d) => { state.devices = d; }));
+    if (what === "all") jobs.push(api("/api/devices").then((d) => { state.devices = d; }), loadLimits());
     await Promise.all(jobs);
     render();
   } catch (e) {
@@ -670,6 +670,308 @@ function renderDevices() {
   host.append(setup, el("p", { class: "version", text: `lightcurve ${dv.version}` }));
 }
 
+/* ---- limits ---- */
+const RULE_KINDS = { day: "A day", every: "In any", block: "Closed", window: "Between", stretch: "At a time" };
+// Python's weekdays: 0 is Monday.
+const LDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const ALL = [0, 1, 2, 3, 4, 5, 6];
+const DEFAULT_UNLOCK = { hold: 5, wait: 3, grant: 10, per_day: null };
+const hhmm = (ms) => { const t = new Date(ms); return `${pad2(t.getHours())}:${pad2(t.getMinutes())}`; };
+function whenText(ms) {
+  const t = new Date(ms), n = new Date();
+  const days = Math.round((new Date(t.getFullYear(), t.getMonth(), t.getDate()) - new Date(n.getFullYear(), n.getMonth(), n.getDate())) / 864e5);
+  if (days <= 0) return hhmm(ms);
+  if (days === 1) return `tomorrow ${hhmm(ms)}`;
+  return `${WEEKDAYS[t.getDay()].slice(0, 3)} ${hhmm(ms)}`;
+}
+function minText(m) {
+  if (m < 60) return `${m} min`;
+  return m % 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m / 60} h`;
+}
+function daysText(days) {
+  if (!days || days.length === 7) return "";
+  const s = days.join("");
+  if (s === "01234") return " on weekdays";
+  if (s === "56") return " on weekends";
+  return " on " + days.map((d) => LDAYS[d].slice(0, 3)).join(", ");
+}
+function ruleText(r) {
+  const on = daysText(r.days);
+  if (r.kind === "day") return r.minutes ? `${minText(r.minutes)} a day${on}` : `Closed all day${on}`;
+  if (r.kind === "every") return `${minText(r.minutes)} in any ${r.hours} h`;
+  if (r.kind === "block") return `Closed ${r.from} to ${r.to}${on}`;
+  if (r.kind === "window") return `${minText(r.minutes)} from ${r.from} to ${r.to}${on}`;
+  return `${minText(r.minutes)} at a time, then ${minText(r.rest)} off`;
+}
+function limitStatus(item) {
+  const s = item.state;
+  if (s.blocked) return { text: s.until ? `Closed until ${whenText(s.until * 1000)}` : "Closed", alert: true };
+  if (s.left != null) return { text: `${dur(s.left)} left`, alert: false };
+  return { text: "Open", alert: false };
+}
+
+/** A button that only acts once it has been held down for `seconds`. Letting go early starts it over. */
+function holdButton(text, seconds, onDone, cls) {
+  const b = el("button", { type: "button", class: `btn hold ${cls || ""}`, "aria-label": `${text}, hold ${seconds} seconds` },
+    el("span", { class: "fill", "aria-hidden": "true" }), el("span", { class: "t", text }));
+  let t0 = 0, raf = 0;
+  const reset = () => { t0 = 0; cancelAnimationFrame(raf); b.style.setProperty("--p", 0); };
+  const step = () => {
+    const p = Math.min(1, (performance.now() - t0) / (seconds * 1000));
+    b.style.setProperty("--p", p);
+    if (p >= 1) { t0 = 0; onDone(b); } else raf = requestAnimationFrame(step);
+  };
+  const begin = () => { if (t0 || b.disabled) return; t0 = performance.now(); raf = requestAnimationFrame(step); };
+  b.addEventListener("pointerdown", (ev) => { if (ev.button) return; b.setPointerCapture(ev.pointerId); begin(); });
+  for (const t of ["pointerup", "pointercancel", "lostpointercapture"]) b.addEventListener(t, () => { if (t0) reset(); });
+  b.addEventListener("keydown", (ev) => { if ((ev.key === " " || ev.key === "Enter") && !ev.repeat) { ev.preventDefault(); begin(); } });
+  b.addEventListener("keyup", (ev) => { if ((ev.key === " " || ev.key === "Enter") && t0) reset(); });
+  b.addEventListener("contextmenu", (ev) => ev.preventDefault());
+  return b;
+}
+
+async function loadLimits() {
+  try { state.limits = await api("/api/limits"); } catch (e) { state.limits = null; }
+}
+
+function renderLimits() {
+  const L = state.limits, host = clear($("limits"));
+  if (!L) { host.append(el("p", { class: "empty", text: "Can't reach the hub" })); return; }
+  const n = L.limits.length;
+  const add = el("button", { type: "button", class: "btn primary", text: "New limit", onclick: () => openLimit(null) });
+  if (!n) {
+    host.append(el("p", { class: "figure" }, el("span", { class: "num", text: "0" }), el("span", { class: "versus", text: "limits" })), el("p", { class: "limits-new" }, add));
+  } else {
+    host.append(el("p", { class: "figure" }, el("span", { class: "num", text: String(n) }), el("span", { class: "versus", text: n === 1 ? "limit" : "limits" })));
+    const ul = el("ul", { class: "limits" });
+    for (const item of L.limits) ul.append(limitRow(item));
+    host.append(ul, el("p", { class: "limits-new" }, add));
+  }
+  host.append(limitSettings(L));
+}
+
+function limitRow(item) {
+  const l = item.limit, st = limitStatus(item);
+  const tight = item.state.rules.filter((r) => r.active && r.allowed).sort((a, b) => (a.allowed - a.used) - (b.allowed - b.used))[0];
+  const kids = [
+    el("span", { class: "l-head" }, el("span", { class: "l-name", text: item.label }), el("span", { class: `l-state${st.alert ? " alert" : ""}`, text: st.text })),
+    el("span", { class: "l-rules", text: l.rules.map((r, i) => { const t = ruleText(r); return i ? t[0].toLowerCase() + t.slice(1) : t; }).join(", ") }),
+  ];
+  if (tight) {
+    kids.push(el("span", { class: "l-bar", title: `${dur(tight.used)} of ${dur(tight.allowed)}` },
+      el("span", { class: tight.used >= tight.allowed ? "over" : "", style: `width:${Math.min(100, (tight.used / tight.allowed) * 100)}%` })));
+  }
+  if (item.pending_at) kids.push(el("span", { class: "l-pending", text: item.deleting ? `Goes at ${whenText(item.pending_at)}` : `Change at ${whenText(item.pending_at)}` }));
+  return el("li", {}, el("button", { type: "button", class: "limit", onclick: () => openLimit(item) }, kids));
+}
+
+function limitSettings(L) {
+  const s = L.settings, box = el("div", { class: "limit-settings" });
+  const wait = el("input", { type: "number", min: 0, max: 1440, value: s.changes_wait, inputmode: "numeric", "aria-label": "Minutes a loosening waits" });
+  const guard = el("input", { type: "checkbox", checked: s.guard, id: "guard-box" });
+  const msg = el("p", { class: "hint" });
+  if (L.settings_pending && L.settings_at) msg.textContent = `Change at ${whenText(L.settings_at)}`;
+  const body = () => ({ changes_wait: Number(wait.value), guard: guard.checked });
+  const actions = el("div", { class: "row-actions" });
+  const save = el("button", { type: "button", class: "btn", text: "Save" });
+  const finish = async () => {
+    try {
+      const r = await api("/api/limits/settings", { method: "PUT", body: body() });
+      await loadLimits(); renderLimits();
+      if (!r.applied) { const p = $("limits").querySelector(".limit-settings .hint"); if (p) p.textContent = `Change at ${whenText(r.at)}`; }
+    } catch (e) { msg.className = "error"; msg.textContent = e.message; }
+  };
+  save.addEventListener("click", async () => {
+    try {
+      const dry = await api("/api/limits/settings", { method: "PUT", body: { ...body(), dry: true } });
+      if (!dry.wait) return finish();
+      save.replaceWith(holdButton("Hold to save", 5, finish));
+      msg.className = "hint"; msg.textContent = `Takes effect ${dry.minutes} min after`;
+    } catch (e) { msg.className = "error"; msg.textContent = e.message; }
+  });
+  actions.append(save);
+  if (L.settings_pending) actions.append(el("button", { type: "button", class: "quiet", text: "Keep as it is", onclick: async () => { await api("/api/limits/settings", { method: "PUT", body: { cancel: true } }); await loadLimits(); renderLimits(); } }));
+  box.append(el("h2", { text: "Changes" }),
+    el("label", { class: "line" }, "Loosening waits", wait, "min"),
+    el("label", { class: "line", for: "guard-box" }, guard, "Cover lightcurve's settings on phones"),
+    actions, msg);
+  return box;
+}
+
+/* the editor */
+function numIn(value, min, max, label, onset) {
+  const i = el("input", { type: "number", class: "n", min, max, value: value == null ? "" : value, inputmode: "numeric", "aria-label": label });
+  i.addEventListener("input", () => onset(i.value === "" ? null : Number(i.value)));
+  return i;
+}
+function timeIn(value, label, onset) {
+  const i = el("input", { type: "time", value, "aria-label": label, step: 60 });
+  i.addEventListener("input", () => { if (i.value) onset(i.value.slice(0, 5)); });
+  return i;
+}
+function dayPicker(r) {
+  const box = el("span", { class: "days", role: "group", "aria-label": "Days" });
+  for (const d of ALL) {
+    const b = el("button", { type: "button", "aria-pressed": String(r.days.includes(d)), "aria-label": LDAYS[d], title: LDAYS[d], text: LDAYS[d][0] });
+    b.addEventListener("click", () => {
+      const on = r.days.includes(d);
+      if (on && r.days.length === 1) return;
+      r.days = on ? r.days.filter((x) => x !== d) : [...r.days, d].sort();
+      b.setAttribute("aria-pressed", String(!on));
+    });
+    box.append(b);
+  }
+  return box;
+}
+const RULE_DEFAULTS = {
+  day: { minutes: 60 }, every: { minutes: 30, hours: 4 }, block: { from: "22:00", to: "07:00" },
+  window: { minutes: 20, from: "09:00", to: "17:00" }, stretch: { minutes: 20, rest: 30 },
+};
+function newRule(kind) {
+  const r = { kind, ...RULE_DEFAULTS[kind] };
+  if (["day", "block", "window"].includes(kind)) r.days = [...ALL];
+  return r;
+}
+function ruleRow(r, onKind, onRemove) {
+  const kind = el("select", { "aria-label": "Kind of rule" }, Object.entries(RULE_KINDS).map(([k, v]) => el("option", { value: k, selected: k === r.kind, text: v })));
+  kind.addEventListener("change", () => onKind(kind.value));
+  const set = (k) => (v) => { r[k] = v; };
+  const f = [];
+  if (r.kind === "day") f.push(numIn(r.minutes, 0, 1440, "Minutes", set("minutes")), "min");
+  if (r.kind === "every") f.push(numIn(r.minutes, 0, 1440, "Minutes", set("minutes")), "min in", numIn(r.hours, 1, 24, "Hours", set("hours")), "h");
+  if (r.kind === "block") f.push(timeIn(r.from, "From", set("from")), "to", timeIn(r.to, "To", set("to")));
+  if (r.kind === "window") f.push(numIn(r.minutes, 0, 1440, "Minutes", set("minutes")), "min,", timeIn(r.from, "From", set("from")), "to", timeIn(r.to, "To", set("to")));
+  if (r.kind === "stretch") f.push(numIn(r.minutes, 1, 720, "Minutes at a time", set("minutes")), "min, then", numIn(r.rest, 1, 720, "Minutes off", set("rest")), "off");
+  const row = el("div", { class: "rule" }, el("div", { class: "rule-line" }, kind, ...f,
+    el("button", { type: "button", class: "x", "aria-label": "Remove rule", title: "Remove", text: "×", onclick: onRemove })));
+  if (r.days) row.append(dayPicker(r));
+  return row;
+}
+
+function openLimit(item) {
+  // The limit in force, not a change that's waiting: what's saved from here is measured against it.
+  const draft = item ? JSON.parse(JSON.stringify(item.limit))
+    : { targets: [], labels: {}, name: "", rules: [newRule("day")], unlock: { ...DEFAULT_UNLOCK } };
+  draft.labels = draft.labels || {};
+  const sheet = clear($("sheet"));
+  const card = el("div", { class: "card wide", role: "dialog", "aria-modal": "true", "aria-label": item ? item.label : "New limit" });
+
+  // what it covers
+  const things = (state.range ? state.range.census : []).filter((e) => e.key);
+  const byLabel = Object.fromEntries(things.map((e) => [e.label.toLowerCase(), e]));
+  const chips = el("div", { class: "chips" });
+  const listId = "limit-things";
+  const pick = el("input", { type: "text", list: listId, placeholder: "Add an app or site", "aria-label": "Add an app or site", autocapitalize: "off", spellcheck: "false" });
+  const data = el("datalist", { id: listId }, things.slice(0, 300).map((e) => el("option", { value: e.label })));
+  const cats = el("div", { class: "cat-toggles", role: "group", "aria-label": "Every app of a kind" });
+  const drawChips = () => {
+    clear(chips);
+    for (const t of draft.targets.filter((x) => x.startsWith("n:"))) {
+      chips.append(el("span", { class: "chip" }, draft.labels[t] || t.slice(2),
+        el("button", { type: "button", "aria-label": `Remove ${draft.labels[t] || t.slice(2)}`, text: "×", onclick: () => { draft.targets = draft.targets.filter((x) => x !== t); drawChips(); } })));
+    }
+    for (const b of cats.children) b.setAttribute("aria-pressed", String(draft.targets.includes(`c:${b.dataset.cat}`)));
+  };
+  const addThing = () => {
+    const v = pick.value.trim();
+    if (!v) return;
+    const hit = byLabel[v.toLowerCase()];
+    const k = hit ? hit.key : `n:${v.toLowerCase()}`;
+    if (!draft.targets.includes(k)) draft.targets.push(k);
+    draft.labels[k] = hit ? hit.label : v;
+    pick.value = "";
+    drawChips();
+  };
+  pick.addEventListener("change", addThing);
+  pick.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); addThing(); } });
+  for (const c of CATS) {
+    const b = el("button", { type: "button", "data-cat": c, title: `Everything in ${CAT_NAME[c]}` }, key(c), CAT_NAME[c]);
+    b.addEventListener("click", () => {
+      const t = `c:${c}`;
+      draft.targets = draft.targets.includes(t) ? draft.targets.filter((x) => x !== t) : [...draft.targets, t];
+      drawChips();
+    });
+    cats.append(b);
+  }
+  drawChips();
+
+  // the rules
+  const rules = el("div", { class: "rules" });
+  const drawRules = () => {
+    clear(rules);
+    draft.rules.forEach((r, i) => rules.append(ruleRow(r,
+      (k) => { draft.rules[i] = newRule(k); drawRules(); },
+      () => { draft.rules.splice(i, 1); drawRules(); })));
+  };
+  drawRules();
+  const addRule = el("select", { class: "add-rule", "aria-label": "Add a rule" },
+    el("option", { value: "", text: "Add a rule" }), Object.entries(RULE_KINDS).map(([k, v]) => el("option", { value: k, text: v })));
+  addRule.addEventListener("change", () => { if (addRule.value) { draft.rules.push(newRule(addRule.value)); addRule.value = ""; drawRules(); } });
+
+  // unlocking
+  const u = draft.unlock || { ...DEFAULT_UNLOCK };
+  const allow = el("input", { type: "checkbox", checked: !!draft.unlock, id: "allow-unlock" });
+  const uset = (k) => (v) => { u[k] = v; };
+  const unlockFields = el("div", { class: "unlock" },
+    el("label", { class: "line" }, "Hold", numIn(u.hold, 1, 60, "Seconds to hold", uset("hold")), "s, then wait", numIn(u.wait, 0, 120, "Minutes to wait", uset("wait")), "min"),
+    el("label", { class: "line" }, "Opens for", numIn(u.grant, 1, 240, "Minutes it opens for", uset("grant")), "min, up to", numIn(u.per_day, 1, 50, "Unlocks a day", uset("per_day")), "a day"));
+  unlockFields.hidden = !draft.unlock;
+  allow.addEventListener("change", () => { unlockFields.hidden = !allow.checked; });
+
+  const name = el("input", { type: "text", value: draft.name || "", placeholder: "Name", "aria-label": "Name", maxlength: 60 });
+  const msg = el("p", { class: "hint" });
+  if (item && item.pending_at) msg.textContent = item.deleting ? `Goes at ${whenText(item.pending_at)}` : `A change waits until ${whenText(item.pending_at)}. Saving replaces it.`;
+
+  const body = () => ({ ...draft, name: name.value.trim(), unlock: allow.checked ? { ...u, per_day: u.per_day || null } : null });
+  const fail = (e) => { msg.className = "error"; msg.textContent = e.message; };
+  const done = async (r) => {
+    await loadLimits();
+    closeSheet();
+    renderLimits();
+    if (r && r.applied === false) showTipNote(`Takes effect at ${whenText(r.at)}`);
+  };
+  const actions = el("div", { class: "row" });
+  const save = el("button", { type: "button", class: "btn primary", text: "Save" });
+  const commit = async () => { try { await done(await api("/api/limits", { method: "PUT", body: body() })); } catch (e) { fail(e); } };
+  save.addEventListener("click", async () => {
+    try {
+      if (item) {
+        const dry = await api("/api/limits", { method: "PUT", body: { ...body(), dry: true } });
+        if (dry.wait) {
+          save.replaceWith(holdButton("Hold to save", 5, commit, "primary"));
+          msg.className = "hint"; msg.textContent = `Loosens it, so it takes effect ${dry.minutes} min after`;
+          return;
+        }
+      }
+      await commit();
+    } catch (e) { fail(e); }
+  });
+  if (item) {
+    actions.append(holdButton("Hold to delete", 5, async () => {
+      try { await done(await api(`/api/limits/${encodeURIComponent(item.limit.id)}`, { method: "DELETE" })); } catch (e) { fail(e); }
+    }, "danger"));
+    if (item.pending_at) actions.append(el("button", { type: "button", class: "btn", text: "Keep as it is", onclick: async () => { await api(`/api/limits/${encodeURIComponent(item.limit.id)}/cancel`, { method: "POST", body: {} }); done(); } }));
+  }
+  actions.append(el("span", { class: "grow" }), el("button", { type: "button", class: "btn", text: "Close", onclick: closeSheet }), save);
+
+  card.append(el("h3", { text: item ? item.label : "New limit" }), name,
+    el("h4", { text: "What" }), chips, el("div", { class: "field" }, pick), data, cats,
+    el("h4", { text: "Rules" }), rules, addRule,
+    el("h4", { text: "Unlocking" }), el("label", { class: "line", for: "allow-unlock" }, allow, "Allow unlocking"), unlockFields,
+    msg, actions);
+  sheet.append(card);
+  sheet.hidden = false;
+  sheet._return = document.activeElement;
+  (item ? name : pick).focus();
+}
+
+/** A short note in the corner, for a change that has been put off. */
+function showTipNote(text) {
+  const n = el("div", { class: "note-toast", role: "status", text });
+  document.body.append(n);
+  setTimeout(() => n.remove(), 4000);
+}
+
 /* ---- the sheet: what an app counts as ---- */
 function openSheet(e, scope) {
   const sheet = clear($("sheet"));
@@ -717,11 +1019,12 @@ function render() {
   }
   for (const b of document.querySelectorAll(".seg button")) b.setAttribute("aria-pressed", String(Number(b.dataset.days) === state.days));
   if (state.view === "day") renderWho(d.devices, d.all_seconds);
-  else if (r && state.view !== "devices") renderWho(r.devices, r.all_seconds);
+  else if (r && state.view !== "devices" && state.view !== "limits") renderWho(r.devices, r.all_seconds);
   if (state.view === "day") { renderHeadline(); renderDayChart(); renderStats(); renderDayApps(); state.first = false; }
   else if (state.view === "weeks" && r) renderWeeks();
   else if (state.view === "apps" && r) renderApps();
   else if (state.view === "burns" && r) renderBurns();
+  else if (state.view === "limits") renderLimits();
   else if (state.view === "devices" && state.devices) renderDevices();
 }
 

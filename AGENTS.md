@@ -6,13 +6,14 @@ The README says what it does and how it counts; keep it true when behaviour chan
 ## Map
 
 - `lightcurve/core.py`: the schema, intervals, days (04:00 to 04:00), naming and categories, every report (`day_report`, `range_report`, `ignition_report`) and `ingest`. The hub, the tracker and the command all go through it.
+- `lightcurve/limits.py`: app limits: checking them, how much of one is left (`evaluate`), which changes loosen one (`loosens`) and so wait, and what the hub hands a phone (`report`). Its rules are repeated in `android/.../Limits.kt`; change both together, and keep `tests/test_limits.py` and `LimitsTest.kt` alike.
 - `lightcurve/hub.py`: the HTTP server (stdlib `http.server`) and its API. Serves `web/` as it is on disk, so a change there is live on the next page load.
 - `lightcurve/ignition.py`: the link to ignition, through ignition's ordinary API only. ignition's repo is never touched for this.
 - `lightcurve/tracker.py`: the KDE tracker. `Recorder` holds the rules for turning focus, lock and idle into spans and has no D-Bus in it, so it is what the tests drive. `run()` is the daemon around it.
 - `lightcurve/wayland_idle.py`: a dependency-free client for `ext-idle-notify-v1`.
 - `lightcurve/cli.py`: the `lightcurve` command. `lightcurve/demo.py`: made-up data for `serve --demo`.
 - `web/`: the dashboard. Plain HTML, CSS and JS, no build step. Fonts are in `web/fonts`.
-- `android/`: the phone app, Kotlin with no libraries. `Spans.kt` and `Sites.kt` are the pure logic and have the unit tests; `SiteWatcher` is an accessibility service that notes the domain in a browser's address bar (its matching is ignition's `BlockerService`), and sync cuts browser spans by it; `MainActivity` is a WebView onto the hub plus one native page. `Today.kt` sends today's total to doppler (`ca.heeney.lightcurve.TODAY`, extras `lit` and `date`) after each good sync, and answers its `ca.heeney.lightcurve.REFRESH`; keep both names as doppler's `ScreenTime.kt` has them.
+- `android/`: the phone app, Kotlin with no libraries. `Spans.kt` and `Sites.kt` are the pure logic and have the unit tests; `SiteWatcher` is an accessibility service that notes the domain in a browser's address bar (its matching is ignition's `BlockerService`), and sync cuts browser spans by it; `MainActivity` is a WebView onto the hub plus one native page. Limits: `Limits.kt` is the pure logic, `LimitStore` keeps the hub's limits and the unlocks, `LimitKeeper` is the accessibility service that enforces them and covers lightcurve's own Settings pages, and `BlockActivity` is the hold-and-wait screen. `Today.kt` sends today's total to doppler (`ca.heeney.lightcurve.TODAY`, extras `lit` and `date`) after each good sync, and answers its `ca.heeney.lightcurve.REFRESH`; keep both names as doppler's `ScreenTime.kt` has them.
 - `install.sh`, `update.sh`, `uninstall.sh`, `systemd/`: per-user install, no sudo anywhere.
 
 ## Rules that are easy to break
@@ -22,6 +23,7 @@ The README says what it does and how it counts; keep it true when behaviour chan
 - Analysis words are promises. "Usual" is a median of the user's own days and isn't claimed under five days of history; the burn comparison needs three days on each side; incomplete data is said out loud (`coverage_notes`). Don't add a number the data can't back.
 - No window titles or addresses are stored. `site_from_caption` returns "" when a title doesn't name a site. Phones send a domain as the site; `site_name` turns it into the name a title would give (`SITE_NAMES`), at read time, so a better table fixes old records too.
 - The category colours in `web/style.css` were checked with the dataviz skill's `validate_palette.js --pairs all` on both surfaces. Re-run it if you change one.
+- A limit change that loosens anything waits (`changes_wait`); only tightening is immediate. Any new way to edit limits has to go through `limits.save`, or it is a way around them. The phone's waits use `SystemClock.elapsedRealtime`, never wall time or animators (animation speed can be set to zero).
 - Screenshots in `docs/` are demo data only. Never commit a real record.
 
 ## Test

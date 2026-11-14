@@ -14,7 +14,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from . import core
+from . import core, limits
 from .ignition import Ignition
 
 WEB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web")
@@ -181,6 +181,32 @@ class Hub:
             self.ignition.refresh(force=True)
         return {"ok": True, "ignition": self.ignition_status()}
 
+    def limit_report(self, q):
+        with self.lock:
+            return limits.report(self.db, device=self._device(q))
+
+    def save_limit(self, body):
+        with self.lock:
+            if body.get("dry"):
+                return limits.would_wait(self.db, body)
+            return limits.save(self.db, body)
+
+    def delete_limit(self, lid):
+        with self.lock:
+            return limits.delete(self.db, lid)
+
+    def cancel_limit(self, lid):
+        with self.lock:
+            return limits.cancel(self.db, lid)
+
+    def limit_settings(self, body):
+        with self.lock:
+            if body.get("cancel"):
+                return limits.cancel_settings(self.db)
+            if body.get("dry"):
+                return limits.settings_would_wait(self.db, body)
+            return limits.save_settings(self.db, body)
+
     def block(self, body):
         block = self.ignition.add_block(body.get("list"), body.get("value"), str(body.get("label") or "")[:80])
         return {"ok": True, "block": block}
@@ -270,16 +296,27 @@ def make_handler(hub):
                     return self.send(200, hub.apps(q, "site"))
                 if r == ["things"]:
                     return self.send(200, hub.apps(q, None))
+                if r == ["limits"]:
+                    return self.send(200, hub.limit_report(q))
             elif method == "POST":
                 if r == ["ingest"]:
                     return self.send(200, hub.ingest(self.body()))
                 if r == ["ignition", "block"]:
                     return self.send(200, hub.block(self.body()))
+                if len(r) == 3 and r[0] == "limits" and r[2] == "cancel":
+                    return self.send(200, hub.cancel_limit(r[1]))
             elif method == "PUT":
                 if r == ["category"]:
                     return self.send(200, hub.set_category(self.body()))
                 if r == ["settings"]:
                     return self.send(200, hub.put_settings(self.body()))
+                if r == ["limits", "settings"]:
+                    return self.send(200, hub.limit_settings(self.body()))
+                if r == ["limits"]:
+                    return self.send(200, hub.save_limit(self.body()))
+            elif method == "DELETE":
+                if len(r) == 2 and r[0] == "limits":
+                    return self.send(200, hub.delete_limit(r[1]))
             elif method == "PATCH":
                 if len(r) == 2 and r[0] == "devices":
                     return self.send(200, hub.patch_device(r[1], self.body()))
@@ -315,6 +352,9 @@ def make_handler(hub):
 
         def do_PATCH(self):
             self.handle_method("PATCH")
+
+        def do_DELETE(self):
+            self.handle_method("DELETE")
 
     return Handler
 

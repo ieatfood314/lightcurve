@@ -2,4 +2,6 @@
     <string name="app_name">lightcurve</string>
     <string name="site_watcher">lightcurve sites</string>
     <string name="site_watcher_about">Reads the address bar in your browsers, so browser time can be split by site. Only the domain is kept, such as youtube.com. Nothing else on screen is read.</string>
+    <string name="limit_keeper">lightcurve limits</string>
+    <string name="limit_keeper_about">Keeps your app limits. It is told which app is in front, and covers it when it is over a limit. While limits are on it also covers lightcurve\'s own pages in Settings, so they can\'t be switched off in a moment. Nothing is kept or sent.</string>
 </resources>
