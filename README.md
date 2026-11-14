@@ -68,7 +68,7 @@ Set them up under *Limits* on the dashboard. A limit covers some apps and sites,
 
 Whichever rule is tightest wins. Time on every device counts, two screens at once counted once, so an hour of YouTube on the computer comes off the phone's allowance too.
 
-The phone keeps them. Turn on *lightcurve limits* in Accessibility (it shows under *Limits* in the app). When something is over a limit, a screen covers it. To get through, hold the ring for 5 seconds, then stay on that screen for 3 minutes; let go early or leave the screen and it starts over. Then it opens for 10 minutes. Each of those numbers is set per limit, along with how many unlocks a day you get, or none at all. Both waits run on the clock that counts from boot, so changing the phone's time doesn't hurry them, and a restart ends an unlock. Site limits need *Sites* on as well.
+The phone keeps them. Turn on *lightcurve limits* in Accessibility: the app's Limits tab says whether this phone keeps them and has a button for it, as does *Limits* in the app's settings (the sliders at the top). When something is over a limit, a screen covers it. To get through, hold the ring for 5 seconds, then stay on that screen for 3 minutes; let go early or leave the screen and it starts over. Then it opens for 10 minutes. Each of those numbers is set per limit, along with how many unlocks a day you get, or none at all. Both waits run on the clock that counts from boot, so changing the phone's time doesn't hurry them, and a restart ends an unlock. Site limits need *Sites* on as well.
 
 Getting around a limit is meant to be slow, not impossible:
 

@@ -80,7 +80,8 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 .tabs button[aria-current="page"] { color: var(--ink); background: var(--raised); }
 .tools { display: flex; align-items: center; gap: 2px; margin-left: auto; }
 .icon { width: 36px; height: 36px; display: inline-grid; place-items: center; border-radius: 8px; color: var(--ink-2); }
-.icon:hover, .icon[aria-current="page"] { color: var(--ink); background: var(--raised); }
+.icon[aria-current="page"] { color: var(--ink); background: var(--raised); }
+@media (hover: hover) { .icon:hover { color: var(--ink); background: var(--raised); } }
 .quiet { color: var(--ink-2); font-size: 13.5px; font-weight: 500; border-radius: 7px; padding: 5px 9px; }
 .quiet:hover { color: var(--ink); background: var(--raised); }
 
@@ -269,6 +270,8 @@ button.limit:hover { background: var(--well); }
 .l-bar span.over { background: var(--alert); }
 .l-pending { color: var(--ink-3); font-size: 12.5px; }
 .limits-new { margin: 18px 0 0; }
+.phone-keep { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 6px 0 0; color: var(--ink-2); }
+.phone-keep.alert { color: var(--alert); font-weight: 560; }
 .limit-settings { margin-top: 8px; display: grid; gap: 10px; justify-items: start; }
 .limit-settings h2 { margin-bottom: 0; }
 .row-actions { display: flex; gap: 8px; align-items: center; }

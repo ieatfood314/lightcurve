@@ -45,6 +45,7 @@ class MainActivity : Activity() {
     private lateinit var panel: ScrollView
     private lateinit var hubField: EditText
     private lateinit var hubStatus: TextView
+    private lateinit var connectButton: TextView
     private lateinit var accessStatus: TextView
     private lateinit var accessButton: TextView
     private lateinit var syncStatus: TextView
@@ -52,8 +53,10 @@ class MainActivity : Activity() {
     private lateinit var sitesButton: TextView
     private lateinit var limitsStatus: TextView
     private lateinit var limitsButton: TextView
+    private lateinit var limitsEdit: TextView
     private lateinit var nameField: EditText
-    private lateinit var dashboardButton: TextView
+    private lateinit var backButton: ImageView
+    private lateinit var markView: ImageView
     private var webReady = false
     private var syncing = false
 
@@ -103,6 +106,8 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         refreshPanel()
+        // Back from Android's settings: the Limits tab says whether this phone keeps them.
+        if (webReady) web.evaluateJavascript("window.phoneChanged && window.phoneChanged()", null)
         if (store.hub.isNotEmpty() && Collector.hasAccess(this) &&
             System.currentTimeMillis() - store.lastAttempt > 30_000) sync(quiet = true)
     }
@@ -118,9 +123,20 @@ class MainActivity : Activity() {
 
     // ---- the dashboard ----
 
-    private fun openDashboard() {
+    private fun openDashboard(view: String = "") {
         webReady = false
-        web.loadUrl(store.hub + "/")
+        web.loadUrl(store.hub + "/" + if (view.isEmpty()) "" else "#$view")
+    }
+
+    /** The limits themselves are made on the dashboard's Limits tab. */
+    private fun openLimitsTab() {
+        if (!webReady) return openDashboard("limits")
+        hidePanel()
+        web.evaluateJavascript("window.setView && window.setView('limits')", null)
+    }
+
+    private fun openAccessibility() {
+        runCatching { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
     }
 
     private inner class Client : WebViewClient() {
@@ -134,6 +150,7 @@ class MainActivity : Activity() {
             if (failed) return
             webReady = true
             web.visibility = View.VISIBLE
+            refreshPanel()
             if (store.hub.isNotEmpty() && Collector.hasAccess(this@MainActivity)) hidePanel()
         }
 
@@ -158,6 +175,20 @@ class MainActivity : Activity() {
     private inner class Bridge {
         @JavascriptInterface
         fun openSettings() = runOnUiThread { showPanel() }
+
+        /** What the Limits tab says about this phone: is it keeping the limits, and can it see sites. */
+        @JavascriptInterface
+        fun phone(): String {
+            val ctx = this@MainActivity
+            return org.json.JSONObject()
+                .put("keeper", LimitKeeper.enabled(ctx))
+                .put("sites", SiteWatcher.enabled(ctx))
+                .put("site_limits", LimitStore.get(ctx).limits.any { it.sites.isNotEmpty() })
+                .toString()
+        }
+
+        @JavascriptInterface
+        fun turnOn() = runOnUiThread { openAccessibility() }
 
         /** The dashboard has dark and light; the bars around it follow whichever is showing. */
         @JavascriptInterface
@@ -190,6 +221,7 @@ class MainActivity : Activity() {
 
     private fun showPanel() {
         refreshPanel()
+        panel.scrollTo(0, 0)
         panel.visibility = View.VISIBLE
         setBars(color(R.color.field), !resources.getBoolean(R.bool.light_bars))
     }
@@ -311,7 +343,25 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24f), dp(28f), dp(24f), dp(48f))
         }
-        col.add(mark(), wrap = true)
+        markView = mark()
+        col.add(markView, wrap = true)
+        backButton = ImageView(this).apply {
+            setImageResource(R.drawable.back)
+            imageTintList = android.content.res.ColorStateList.valueOf(color(R.color.ink))
+            contentDescription = "Back"
+            scaleType = ImageView.ScaleType.CENTER
+            isClickable = true
+            isFocusable = true
+            setBackgroundResource(android.R.drawable.list_selector_background)
+            setOnClickListener { hidePanel() }
+        }
+        val top = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(backButton, LinearLayout.LayoutParams(dp(48f), dp(48f)).apply { marginStart = -dp(14f); marginEnd = dp(2f) })
+            addView(text("Settings", 28f, R.color.ink, serif = true))
+        }
+        col.add(top, top = 0f)
         col.section("Hub")
         hubField = field("http://hub:4625", uri = true)
         hubField.setOnEditorActionListener { _, action, _ -> if (action == EditorInfo.IME_ACTION_DONE) { connect(); true } else false }
@@ -326,7 +376,13 @@ class MainActivity : Activity() {
             }
         })
         col.add(hubStatus, top = 10f)
-        col.add(button("Connect", primary = true) { connect() }, top = 14f)
+        connectButton = button("Connect", primary = true) { connect() }
+        col.add(connectButton, top = 14f)
+        hubField.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) = showConnect()
+        })
 
         col.section("Usage access")
         accessStatus = text("", 15f, R.color.ink)
@@ -343,18 +399,16 @@ class MainActivity : Activity() {
         sitesStatus = text("", 15f, R.color.ink)
         col.add(sitesStatus, top = 6f)
         col.add(text("Splits browser time by site.", 15f, R.color.ink2), top = 4f)
-        sitesButton = button("Turn on", primary = false) {
-            runCatching { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
-        }
+        sitesButton = button("Turn on", primary = false) { openAccessibility() }
         col.add(sitesButton, top = 14f)
 
         col.section("Limits")
         limitsStatus = text("", 15f, R.color.ink)
         col.add(limitsStatus, top = 6f)
-        limitsButton = button("Turn on", primary = false) {
-            runCatching { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
-        }
+        limitsButton = button("Turn on", primary = false) { openAccessibility() }
         col.add(limitsButton, top = 14f)
+        limitsEdit = button("Edit limits", primary = false) { openLimitsTab() }
+        col.add(limitsEdit, top = 10f)
 
         col.section("Sync")
         syncStatus = text("", 15f, R.color.ink2)
@@ -370,17 +424,20 @@ class MainActivity : Activity() {
         }
         col.add(nameField, top = 14f)
 
-        dashboardButton = button("Dashboard", primary = false) {
-            if (webReady) hidePanel() else openDashboard()
-        }
-        col.add(dashboardButton, top = 36f)
-        col.add(text("lightcurve ${BuildConfig.VERSION_NAME}", 13f, R.color.ink2), top = 24f)
+        col.add(text("lightcurve ${BuildConfig.VERSION_NAME}", 13f, R.color.ink2), top = 36f)
 
         return ScrollView(this).apply {
             setBackgroundColor(color(R.color.field))
             isFillViewport = true
             addView(col, ViewGroup.LayoutParams(-1, -2))
         }
+    }
+
+    /** Connect only matters while there's no hub, it can't be reached, or the address is being changed. */
+    private fun showConnect() {
+        val same = store.hub.isNotEmpty() && hubField.text.toString().trim().trimEnd('/') == store.hub &&
+            hubStatus.currentTextColor != color(R.color.warn)
+        connectButton.visibility = if (same) View.GONE else View.VISIBLE
     }
 
     private fun saveName() {
@@ -395,6 +452,7 @@ class MainActivity : Activity() {
             hubStatus.setTextColor(color(R.color.ink2))
             hubStatus.text = "Connected"
         }
+        showConnect()
         val access = Collector.hasAccess(this)
         accessStatus.text = if (access) "Allowed" else "Not allowed"
         accessStatus.setTextColor(color(if (access) R.color.ink else R.color.warn))
@@ -424,7 +482,10 @@ class MainActivity : Activity() {
             store.lastSync > 0 -> "Sent ${time.format(Date(store.lastSync))}"
             else -> "Not sent yet"
         }
-        dashboardButton.visibility = if (store.hub.isNotEmpty()) View.VISIBLE else View.GONE
+        limitsEdit.visibility = if (store.hub.isNotEmpty()) View.VISIBLE else View.GONE
+        // Back to the dashboard once there is one; the first time in, the page is the whole app.
+        backButton.visibility = if (webReady) View.VISIBLE else View.GONE
+        markView.visibility = if (store.hub.isEmpty()) View.VISIBLE else View.GONE
     }
 
     /** The mark: the light curve. */

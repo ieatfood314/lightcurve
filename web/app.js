@@ -746,8 +746,23 @@ function renderLimits() {
     for (const item of L.limits) ul.append(limitRow(item));
     host.append(ul, el("p", { class: "limits-new" }, add));
   }
+  const keep = phoneKeeps(n);
+  if (keep) host.firstChild.after(keep);
   host.append(limitSettings(L));
 }
+
+/* In the phone app: whether this phone keeps the limits. They're only kept where its switch is on. */
+function phoneKeeps(n) {
+  const N = window.LightcurveNative;
+  if (!N || !N.phone) return null;
+  let p;
+  try { p = JSON.parse(N.phone()); } catch (e) { return null; }
+  const turnOn = el("button", { type: "button", class: "btn", text: "Turn on", onclick: () => N.turnOn() });
+  if (!p.keeper) return el("p", { class: `phone-keep${n ? " alert" : ""}` }, el("span", { text: "Off on this phone" }), turnOn);
+  if (p.site_limits && !p.sites) return el("p", { class: "phone-keep alert" }, el("span", { text: "Sites are off on this phone" }), turnOn);
+  return el("p", { class: "phone-keep" }, el("span", { text: "On for this phone" }));
+}
+window.phoneChanged = () => { if (state.view === "limits" && state.limits) renderLimits(); };
 
 function limitRow(item) {
   const l = item.limit, st = limitStatus(item);
