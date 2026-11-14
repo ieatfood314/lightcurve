@@ -654,7 +654,6 @@ function renderDevices() {
   const phone = el("div", {}, el("h2", { text: "Add a phone" }),
     el("p", {}, el("a", { href: "https://github.com/ieatfood314/lightcurve/releases/latest", text: "Get the app" }), ", then enter"),
     el("pre", { text: origin }));
-  if (window.LightcurveNative) phone.append(el("p", { style: "margin-top:10px" }, el("button", { type: "button", class: "btn", text: "Phone settings", onclick: () => window.LightcurveNative.openSettings() })));
   setup.append(phone);
 
   const ig = dv.ignition || {};
@@ -1044,6 +1043,12 @@ $("pick").addEventListener("click", () => { const i = $("date-input"); if (i.sho
 $("date-input").addEventListener("change", (ev) => { if (ev.target.value) setDate(ev.target.value); });
 $("more-things").addEventListener("click", () => { state.allDay = !state.allDay; renderDayApps(); });
 $("more-apps").addEventListener("click", () => { state.allApps = !state.allApps; renderApps(); });
+// In the phone app: its own settings (hub, usage access, sites, limits).
+if (window.LightcurveNative && window.LightcurveNative.openSettings) {
+  $("phone-settings").hidden = false;
+  $("phone-settings").addEventListener("click", () => window.LightcurveNative.openSettings());
+}
+
 $("theme").addEventListener("click", () => {
   const next = css("--dark") === "1" ? "plate" : "sky";
   document.documentElement.dataset.theme = next;
