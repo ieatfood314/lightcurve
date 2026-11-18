@@ -1,5 +1,9 @@
 # lightcurve
 
+> **lightcurve is now part of [ignition](https://github.com/ieatfood314/ignition).** Screen time and limits
+> live there, in one app with one server. Installing or updating ignition brings in this hub's data, takes
+> over the Plasma tracker and the phone's device, and the old app stands down. This repo is no longer updated.
+
 Screen time across every computer and phone you use, in one place.
 
 ![A day](docs/day-dark.png)
